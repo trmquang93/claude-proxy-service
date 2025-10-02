@@ -344,6 +344,48 @@
             padding: 40px;
             color: #999;
         }
+        .code-input-section {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f0f4ff;
+            border-radius: 8px;
+            border: 1px solid #c5d5ff;
+        }
+        .code-input-section.active {
+            display: block;
+        }
+        .code-input-section h4 {
+            color: #333;
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+        .code-input-section p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        .code-input-group {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+        .code-input-group input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+        }
+        .code-input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .code-input-actions {
+            display: flex;
+            gap: 8px;
+        }
     </style>
 </head>
 <body>
@@ -367,13 +409,25 @@
                         <strong>Connect your Claude Pro/Max account:</strong>
                         <ol>
                             <li>Click "Connect Claude Account" button</li>
-                            <li>A new window will open with Claude OAuth page</li>
+                            <li>A new tab will open with Claude OAuth page</li>
                             <li>Authorize the application</li>
                             <li>Copy the authorization code from the callback page</li>
-                            <li>Paste it in the prompt that appears</li>
+                            <li>Paste it in the input field below</li>
                         </ol>
                     </div>
-                    <button class="btn-primary" onclick="connectClaude()">Connect Claude Account</button>
+                    <button class="btn-primary" id="connect-btn" onclick="connectClaude()">Connect Claude Account</button>
+
+                    <div id="code-input-section" class="code-input-section">
+                        <h4>Enter Authorization Code</h4>
+                        <p>Paste the authorization code from the OAuth callback page:</p>
+                        <div class="code-input-group">
+                            <input type="text" id="oauth-code-input" placeholder="Paste authorization code here..." />
+                            <div class="code-input-actions">
+                                <button class="btn-primary" onclick="submitAuthCode()">Submit</button>
+                                <button class="btn-secondary" onclick="cancelAuthFlow()">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div id="connected-section" class="section">
                     <p style="color: #2e7d32; margin: 15px 0;">Your Claude account is connected!</p>
@@ -539,15 +593,28 @@
                 currentVerifier = data.verifier;
                 window.open(data.url, '_blank');
 
-                setTimeout(() => {
-                    const code = prompt('Paste the authorization code from the callback page:');
-                    if (code) {
-                        exchangeCode(code);
-                    }
-                }, 2000);
+                // Show inline code input section
+                document.getElementById('code-input-section').classList.add('active');
+                document.getElementById('oauth-code-input').value = '';
+                document.getElementById('oauth-code-input').focus();
             } catch (error) {
                 showMessage('Failed to start OAuth flow', 'error');
             }
+        }
+
+        function submitAuthCode() {
+            const code = document.getElementById('oauth-code-input').value.trim();
+            if (code) {
+                exchangeCode(code);
+            } else {
+                showMessage('Please enter the authorization code', 'error');
+            }
+        }
+
+        function cancelAuthFlow() {
+            document.getElementById('code-input-section').classList.remove('active');
+            document.getElementById('oauth-code-input').value = '';
+            currentVerifier = null;
         }
 
         async function exchangeCode(code) {
@@ -567,6 +634,9 @@
                 if (response.ok) {
                     showMessage('Claude account connected successfully!', 'success');
                     currentVerifier = null;
+                    // Hide the code input section
+                    document.getElementById('code-input-section').classList.remove('active');
+                    document.getElementById('oauth-code-input').value = '';
                     setTimeout(() => checkOAuthStatus(), 1000);
                 } else {
                     showMessage(data.error || 'Failed to connect', 'error');
