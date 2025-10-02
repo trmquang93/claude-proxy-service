@@ -88,7 +88,21 @@ export async function getKeyUsage(keyId: string): Promise<KeyUsage | null> {
       `SELECT * FROM api_key_usage WHERE key_id = $1`,
       [keyId]
     );
-    return result.rows[0] as KeyUsage | null;
+    const row = result.rows[0];
+    if (!row) return null;
+
+    // Parse numeric values to ensure they're numbers, not strings
+    return {
+      key_id: row.key_id,
+      input_tokens: parseInt(row.input_tokens) || 0,
+      output_tokens: parseInt(row.output_tokens) || 0,
+      cache_creation_tokens: parseInt(row.cache_creation_tokens) || 0,
+      cache_read_tokens: parseInt(row.cache_read_tokens) || 0,
+      total_tokens: parseInt(row.total_tokens) || 0,
+      total_cost: parseFloat(row.total_cost) || 0,
+      last_request_at: row.last_request_at,
+      request_count: parseInt(row.request_count) || 0,
+    };
   } catch (error) {
     console.error("[Usage] Get key usage error:", error);
     return null;

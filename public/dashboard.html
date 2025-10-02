@@ -462,6 +462,7 @@
         let authToken = localStorage.getItem('token');
         let currentVerifier = null;
         let assigningKeyId = null;
+        let hasOAuthConnection = false;
 
         if (!authToken) {
             window.location.href = '/';
@@ -486,13 +487,17 @@
         }
 
         function formatTokens(tokens) {
-            if (tokens >= 1000000) return (tokens / 1000000).toFixed(2) + 'M';
-            if (tokens >= 1000) return (tokens / 1000).toFixed(1) + 'K';
-            return tokens.toString();
+            // Handle null, undefined, or non-numeric values
+            const num = Number(tokens) || 0;
+            if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
         }
 
         function formatCost(cost) {
-            return '$' + cost.toFixed(3);
+            // Handle null, undefined, or non-numeric values
+            const num = Number(cost) || 0;
+            return '$' + num.toFixed(3);
         }
 
         async function checkOAuthStatus() {
@@ -502,6 +507,9 @@
             const statusEl = document.getElementById('oauth-status');
             const connectSection = document.getElementById('connect-section');
             const connectedSection = document.getElementById('connected-section');
+
+            // Store OAuth connection status globally
+            hasOAuthConnection = data.connected;
 
             if (data.connected) {
                 statusEl.textContent = 'Connected';
@@ -516,7 +524,7 @@
             }
 
             // Always load API keys (will handle visibility based on OAuth + assigned keys)
-            await loadApiKeys(data.connected);
+            await loadApiKeys(hasOAuthConnection);
 
             // Always check for pending invitations regardless of OAuth status
             loadPendingInvitations();
@@ -580,10 +588,16 @@
 
                 if (response.ok) {
                     showMessage('Claude account disconnected', 'success');
-                    setTimeout(() => checkOAuthStatus(), 1000);
+                    // Immediately update the UI state
+                    await checkOAuthStatus();
+                } else {
+                    // Handle non-ok response
+                    const data = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    showMessage(data.error || 'Failed to disconnect', 'error');
                 }
             } catch (error) {
-                showMessage('Failed to disconnect', 'error');
+                console.error('Disconnect error:', error);
+                showMessage('Failed to disconnect: ' + (error.message || 'Network error'), 'error');
             }
         }
 
@@ -602,7 +616,7 @@
                 if (response.ok) {
                     document.getElementById('new-key-value').textContent = data.key;
                     document.getElementById('new-key-display').style.display = 'block';
-                    loadApiKeys();
+                    loadApiKeys(hasOAuthConnection);
                 } else {
                     showMessage(data.error || 'Failed to generate key', 'error');
                 }
@@ -612,6 +626,18 @@
         }
 
         function renderUsageStats(usage) {
+            // Handle null or undefined usage
+            if (!usage) {
+                usage = {
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    cache_creation_tokens: 0,
+                    cache_read_tokens: 0,
+                    total_cost: 0,
+                    request_count: 0
+                };
+            }
+
             return `
                 <div class="usage-stats">
                     <div class="usage-stat">
@@ -635,7 +661,7 @@
                         <div class="usage-stat-label">Total Cost</div>
                     </div>
                     <div class="usage-stat">
-                        <div class="usage-stat-value">${usage.request_count}</div>
+                        <div class="usage-stat-value">${usage.request_count || 0}</div>
                         <div class="usage-stat-label">Requests</div>
                     </div>
                 </div>
@@ -821,7 +847,7 @@
                 if (response.ok) {
                     showMessage(data.message, 'success');
                     closeAssignModal();
-                    loadApiKeys();
+                    loadApiKeys(hasOAuthConnection);
                     loadPendingInvitations();
                 } else {
                     showMessage(data.error || 'Failed to assign key', 'error');
@@ -842,7 +868,7 @@
                 if (response.ok) {
                     showMessage('Invitation accepted successfully!', 'success');
                     loadPendingInvitations();
-                    loadApiKeys();
+                    loadApiKeys(hasOAuthConnection);
                 } else {
                     showMessage(data.error || 'Failed to accept invitation', 'error');
                 }
@@ -863,7 +889,7 @@
 
                 if (response.ok) {
                     showMessage('API key deleted', 'success');
-                    loadApiKeys();
+                    loadApiKeys(hasOAuthConnection);
                 }
             } catch (error) {
                 showMessage('Failed to delete key', 'error');
