@@ -1,4 +1,5 @@
 import pool from "./db";
+import { calculateCost } from "./pricing";
 
 export interface KeyUsage {
   key_id: string;
@@ -13,6 +14,7 @@ export interface KeyUsage {
 }
 
 export interface UsageUpdate {
+  model: string;
   input_tokens: number;
   output_tokens: number;
   cache_creation_input_tokens?: number;
@@ -39,16 +41,13 @@ export async function updateKeyUsage(keyId: string, usage: UsageUpdate): Promise
     const cacheRead = usage.cache_read_input_tokens || 0;
     const totalTokens = usage.input_tokens + usage.output_tokens + cacheCreation + cacheRead;
 
-    // Approximate cost calculation (based on Claude 3.5 Sonnet pricing)
-    // Input: $3 per million tokens
-    // Output: $15 per million tokens
-    // Cache write: $3.75 per million tokens
-    // Cache read: $0.30 per million tokens
-    const inputCost = (usage.input_tokens / 1_000_000) * 3;
-    const outputCost = (usage.output_tokens / 1_000_000) * 15;
-    const cacheWriteCost = (cacheCreation / 1_000_000) * 3.75;
-    const cacheReadCost = (cacheRead / 1_000_000) * 0.30;
-    const totalCost = inputCost + outputCost + cacheWriteCost + cacheReadCost;
+    // Calculate cost using dynamic pricing based on model
+    const totalCost = calculateCost(usage.model, {
+      input_tokens: usage.input_tokens,
+      output_tokens: usage.output_tokens,
+      cache_creation_input_tokens: cacheCreation,
+      cache_read_input_tokens: cacheRead,
+    });
 
     const now = Math.floor(Date.now() / 1000);
 

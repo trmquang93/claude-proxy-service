@@ -76,6 +76,7 @@ export async function proxyToClaudeAPI(request: Request): Promise<Response> {
     if (claudeResponse.ok && responseData.usage) {
       try {
         await updateKeyUsage(keyValidation.keyId, {
+          model: body.model || "claude-sonnet-4-20250514", // Extract model from request, fallback to Sonnet
           input_tokens: responseData.usage.input_tokens || 0,
           output_tokens: responseData.usage.output_tokens || 0,
           cache_creation_input_tokens: responseData.usage.cache_creation_input_tokens || 0,
