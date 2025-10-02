@@ -6,7 +6,7 @@ import { generateAuthUrl, exchangeCode, saveOAuthTokens, hasOAuthConnection, dis
 import { generateApiKey, listApiKeys, deleteApiKey, assignKey, acceptInvitation, getPendingInvitations, listAllUserKeys } from "./keys";
 import { proxyToClaudeAPI } from "./proxy";
 import { getKeyUsage, getAggregateUsage } from "./usage";
-import db from "./db";
+import pool, { initializeDatabase } from "./db";
 
 const app = new Hono();
 
@@ -121,7 +121,7 @@ app.post("/api/claude/callback", authMiddleware, async (c) => {
     // Save tokens to database
     console.log("[OAuth Callback] Saving OAuth tokens to database");
     try {
-      saveOAuthTokens(user.userId, result.tokens);
+      await saveOAuthTokens(user.userId, result.tokens);
       console.log(`[OAuth Callback] Successfully connected Claude account for user ${user.userId}`);
     } catch (dbError) {
       console.error("[OAuth Callback] Database error while saving tokens:", dbError);
@@ -140,14 +140,14 @@ app.post("/api/claude/callback", authMiddleware, async (c) => {
 
 app.get("/api/claude/status", authMiddleware, async (c) => {
   const user = c.get("user");
-  const connected = hasOAuthConnection(user.userId);
+  const connected = await hasOAuthConnection(user.userId);
 
   return c.json({ connected });
 });
 
 app.delete("/api/claude/disconnect", authMiddleware, async (c) => {
   const user = c.get("user");
-  disconnectOAuth(user.userId);
+  await disconnectOAuth(user.userId);
 
   return c.json({ message: "Claude account disconnected" });
 });
@@ -158,7 +158,8 @@ app.post("/api/keys/generate", authMiddleware, async (c) => {
   const { name } = await c.req.json().catch(() => ({}));
 
   // Check if user has connected Claude OAuth
-  if (!hasOAuthConnection(user.userId)) {
+  const hasConnection = await hasOAuthConnection(user.userId);
+  if (!hasConnection) {
     return c.json({ error: "Please connect your Claude account first" }, 400);
   }
 
@@ -172,15 +173,16 @@ app.post("/api/keys/generate", authMiddleware, async (c) => {
 
 app.get("/api/keys/list", authMiddleware, async (c) => {
   const user = c.get("user");
-  const { owned, assigned } = listAllUserKeys(user.userId);
+  const { owned, assigned } = await listAllUserKeys(user.userId);
 
   // Get user email for pending invitations
-  const currentUser = db.query("SELECT email FROM users WHERE id = ?").get(user.userId) as { email: string } | undefined;
-  const pendingInvitations = currentUser ? getPendingInvitations(currentUser.email) : [];
+  const currentUserResult = await pool.query("SELECT email FROM users WHERE id = $1", [user.userId]);
+  const currentUser = currentUserResult.rows[0] as { email: string } | undefined;
+  const pendingInvitations = currentUser ? await getPendingInvitations(currentUser.email) : [];
 
   // Format owned keys with usage and assignment info
-  const formattedOwned = owned.map((k) => {
-    const usage = getKeyUsage(k.id);
+  const formattedOwned = await Promise.all(owned.map(async (k) => {
+    const usage = await getKeyUsage(k.id);
     let assignedToEmail = null;
     let assignmentStatus = k.assignment_status;
 
@@ -192,7 +194,7 @@ app.get("/api/keys/list", authMiddleware, async (c) => {
       id: k.id,
       prefix: k.key_prefix,
       name: k.name,
-      is_active: k.is_active === 1,
+      is_active: k.is_active,
       created_at: k.created_at,
       assigned_to_email: assignedToEmail,
       assignment_status: assignmentStatus,
@@ -206,18 +208,19 @@ app.get("/api/keys/list", authMiddleware, async (c) => {
         request_count: 0,
       },
     };
-  });
+  }));
 
   // Format assigned keys with owner info and usage
-  const formattedAssigned = assigned.map((k) => {
-    const usage = getKeyUsage(k.id);
-    const owner = db.query("SELECT email FROM users WHERE id = ?").get(k.user_id) as { email: string } | undefined;
+  const formattedAssigned = await Promise.all(assigned.map(async (k) => {
+    const usage = await getKeyUsage(k.id);
+    const ownerResult = await pool.query("SELECT email FROM users WHERE id = $1", [k.user_id]);
+    const owner = ownerResult.rows[0] as { email: string } | undefined;
 
     return {
       id: k.id,
       prefix: k.key_prefix,
       name: k.name || `${owner?.email || 'Unknown'}'s key`,
-      is_active: k.is_active === 1,
+      is_active: k.is_active,
       created_at: k.created_at,
       owner_email: owner?.email || 'Unknown',
       usage: usage || {
@@ -230,11 +233,12 @@ app.get("/api/keys/list", authMiddleware, async (c) => {
         request_count: 0,
       },
     };
-  });
+  }));
 
   // Format pending invitations
-  const formattedPending = pendingInvitations.map((k) => {
-    const owner = db.query("SELECT email FROM users WHERE id = ?").get(k.user_id) as { email: string } | undefined;
+  const formattedPending = await Promise.all(pendingInvitations.map(async (k) => {
+    const ownerResult = await pool.query("SELECT email FROM users WHERE id = $1", [k.user_id]);
+    const owner = ownerResult.rows[0] as { email: string } | undefined;
 
     return {
       id: k.id,
@@ -242,11 +246,11 @@ app.get("/api/keys/list", authMiddleware, async (c) => {
       owner_email: owner?.email || 'Unknown',
       created_at: k.created_at,
     };
-  });
+  }));
 
   // Calculate aggregate usage for owned keys
   const ownedKeyIds = owned.map(k => k.id);
-  const aggregateUsage = ownedKeyIds.length > 0 ? getAggregateUsage(ownedKeyIds) : {
+  const aggregateUsage = ownedKeyIds.length > 0 ? await getAggregateUsage(ownedKeyIds) : {
     input_tokens: 0,
     output_tokens: 0,
     cache_creation_tokens: 0,
@@ -268,7 +272,7 @@ app.delete("/api/keys/:id", authMiddleware, async (c) => {
   const user = c.get("user");
   const keyId = c.req.param("id");
 
-  const success = deleteApiKey(keyId, user.userId);
+  const success = await deleteApiKey(keyId, user.userId);
   if (!success) {
     return c.json({ error: "Failed to delete API key" }, 400);
   }
@@ -313,18 +317,20 @@ app.get("/api/keys/:id/usage", authMiddleware, async (c) => {
   const keyId = c.req.param("id");
 
   // Verify user has access to this key (either owner or assigned user)
-  const key = db.query(`
-    SELECT * FROM api_keys
-    WHERE id = ?
-    AND (user_id = ? OR assigned_to_user_id = ?)
-    AND is_active = 1
-  `).get(keyId, user.userId, user.userId);
+  const keyResult = await pool.query(
+    `SELECT * FROM api_keys
+     WHERE id = $1
+     AND (user_id = $2 OR assigned_to_user_id = $3)
+     AND is_active = true`,
+    [keyId, user.userId, user.userId]
+  );
+  const key = keyResult.rows[0];
 
   if (!key) {
     return c.json({ error: "Key not found or access denied" }, 404);
   }
 
-  const usage = getKeyUsage(keyId);
+  const usage = await getKeyUsage(keyId);
   return c.json({ usage: usage || {
     input_tokens: 0,
     output_tokens: 0,
@@ -342,28 +348,18 @@ app.post("/v1/messages", async (c) => {
 });
 
 // Health check
-app.get("/health", (c) => {
+app.get("/health", async (c) => {
   try {
     // Test database read
-    const testRead = db.query("SELECT 1 as test").get();
+    await pool.query("SELECT 1 as test");
 
     // Test database write
-    const testTableExists = db.query(`
-      SELECT name FROM sqlite_master WHERE type='table' AND name='health_check'
-    `).get();
-
-    if (!testTableExists) {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS health_check (
-          id INTEGER PRIMARY KEY,
-          last_check INTEGER
-        )
-      `);
-    }
-
-    db.query(`
-      INSERT OR REPLACE INTO health_check (id, last_check) VALUES (1, ?)
-    `).run(Date.now());
+    await pool.query(
+      `INSERT INTO health_check (id, last_check) VALUES (1, $1)
+       ON CONFLICT (id)
+       DO UPDATE SET last_check = EXCLUDED.last_check`,
+      [Date.now()]
+    );
 
     return c.json({
       status: "ok",
@@ -389,7 +385,15 @@ app.get("/health", (c) => {
 
 const port = parseInt(process.env.PORT || "3000");
 
-console.log(`Server running on http://localhost:${port}`);
+// Initialize database and start server
+initializeDatabase()
+  .then(() => {
+    console.log(`Server running on http://localhost:${port}`);
+  })
+  .catch((error) => {
+    console.error("Failed to initialize database:", error);
+    process.exit(1);
+  });
 
 export default {
   port,

@@ -1,5 +1,5 @@
 import { generatePKCE } from "@openauthjs/openauth/pkce";
-import db from "./db";
+import pool from "./db";
 
 const CLIENT_ID = process.env.CLAUDE_CLIENT_ID || "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
@@ -116,7 +116,7 @@ export async function exchangeCode(code: string, verifier: string): Promise<{ su
 }
 
 // Save OAuth tokens for user
-export function saveOAuthTokens(userId: string, tokens: { access_token: string; refresh_token: string; expires_at: number }): void {
+export async function saveOAuthTokens(userId: string, tokens: { access_token: string; refresh_token: string; expires_at: number }): Promise<void> {
   try {
     console.log("[DB] Saving OAuth tokens for user:", userId);
 
@@ -124,10 +124,17 @@ export function saveOAuthTokens(userId: string, tokens: { access_token: string; 
       throw new Error("Invalid token data: missing required fields");
     }
 
-    db.query(`
-      INSERT OR REPLACE INTO oauth_tokens (user_id, access_token, refresh_token, expires_at, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(userId, tokens.access_token, tokens.refresh_token, tokens.expires_at, Date.now());
+    await pool.query(
+      `INSERT INTO oauth_tokens (user_id, access_token, refresh_token, expires_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id)
+       DO UPDATE SET
+         access_token = EXCLUDED.access_token,
+         refresh_token = EXCLUDED.refresh_token,
+         expires_at = EXCLUDED.expires_at,
+         updated_at = EXCLUDED.updated_at`,
+      [userId, tokens.access_token, tokens.refresh_token, tokens.expires_at, Date.now()]
+    );
 
     console.log("[DB] OAuth tokens saved successfully for user:", userId);
   } catch (error) {
@@ -137,8 +144,14 @@ export function saveOAuthTokens(userId: string, tokens: { access_token: string; 
 }
 
 // Get OAuth tokens for user
-export function getOAuthTokens(userId: string): OAuthToken | null {
-  return db.query("SELECT * FROM oauth_tokens WHERE user_id = ?").get(userId) as OAuthToken | null;
+export async function getOAuthTokens(userId: string): Promise<OAuthToken | null> {
+  try {
+    const result = await pool.query("SELECT * FROM oauth_tokens WHERE user_id = $1", [userId]);
+    return result.rows[0] as OAuthToken | null;
+  } catch (error) {
+    console.error("[DB] Failed to get OAuth tokens:", error);
+    return null;
+  }
 }
 
 // Refresh access token
@@ -176,7 +189,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ succes
 
 // Ensure valid access token (refresh if needed)
 export async function ensureValidToken(userId: string): Promise<{ success: boolean; accessToken?: string; error?: string }> {
-  const oauthTokens = getOAuthTokens(userId);
+  const oauthTokens = await getOAuthTokens(userId);
 
   if (!oauthTokens) {
     return { success: false, error: "No OAuth tokens found" };
@@ -190,7 +203,7 @@ export async function ensureValidToken(userId: string): Promise<{ success: boole
     }
 
     // Update tokens in database
-    saveOAuthTokens(userId, refreshResult.tokens);
+    await saveOAuthTokens(userId, refreshResult.tokens);
     return { success: true, accessToken: refreshResult.tokens.access_token };
   }
 
@@ -198,12 +211,18 @@ export async function ensureValidToken(userId: string): Promise<{ success: boole
 }
 
 // Check if user has connected Claude OAuth
-export function hasOAuthConnection(userId: string): boolean {
-  const tokens = getOAuthTokens(userId);
+export async function hasOAuthConnection(userId: string): Promise<boolean> {
+  const tokens = await getOAuthTokens(userId);
   return tokens !== null;
 }
 
 // Disconnect OAuth (remove tokens)
-export function disconnectOAuth(userId: string): void {
-  db.query("DELETE FROM oauth_tokens WHERE user_id = ?").run(userId);
+export async function disconnectOAuth(userId: string): Promise<void> {
+  try {
+    await pool.query("DELETE FROM oauth_tokens WHERE user_id = $1", [userId]);
+    console.log("[DB] OAuth disconnected for user:", userId);
+  } catch (error) {
+    console.error("[DB] Failed to disconnect OAuth:", error);
+    throw error;
+  }
 }

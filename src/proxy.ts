@@ -1,7 +1,7 @@
 import { validateApiKey } from "./keys";
 import { ensureValidToken, hasOAuthConnection } from "./oauth";
 import { updateKeyUsage } from "./usage";
-import db from "./db";
+import pool from "./db";
 
 // Proxy request to Claude API
 export async function proxyToClaudeAPI(request: Request): Promise<Response> {
@@ -27,9 +27,11 @@ export async function proxyToClaudeAPI(request: Request): Promise<Response> {
     }
 
     // 3. Check if key owner has active OAuth connection
-    if (!hasOAuthConnection(keyValidation.userId)) {
+    const hasConnection = await hasOAuthConnection(keyValidation.userId);
+    if (!hasConnection) {
       // Get owner email for better error message
-      const owner = db.query("SELECT email FROM users WHERE id = ?").get(keyValidation.userId) as { email: string } | undefined;
+      const ownerResult = await pool.query("SELECT email FROM users WHERE id = $1", [keyValidation.userId]);
+      const owner = ownerResult.rows[0] as { email: string } | undefined;
       const ownerEmail = owner?.email || "the key provider";
 
       return new Response(
@@ -73,7 +75,7 @@ export async function proxyToClaudeAPI(request: Request): Promise<Response> {
     // 8. Track usage if response is successful and contains usage data
     if (claudeResponse.ok && responseData.usage) {
       try {
-        updateKeyUsage(keyValidation.keyId, {
+        await updateKeyUsage(keyValidation.keyId, {
           input_tokens: responseData.usage.input_tokens || 0,
           output_tokens: responseData.usage.output_tokens || 0,
           cache_creation_input_tokens: responseData.usage.cache_creation_input_tokens || 0,

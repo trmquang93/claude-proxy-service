@@ -1,71 +1,131 @@
-import { Database } from "bun:sqlite";
+import { Pool } from "pg";
 
-const db = new Database("database.db");
+// Create PostgreSQL connection pool
+const DATABASE_URL = process.env.DATABASE_URL;
 
-// Enable foreign key constraints
-db.exec("PRAGMA foreign_keys = ON;");
+if (!DATABASE_URL) {
+  throw new Error("DATABASE_URL environment variable is required");
+}
 
-// Create tables
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
-  );
-`);
+export const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+  max: 20, // Maximum number of clients in the pool
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS oauth_tokens (
-    user_id TEXT PRIMARY KEY,
-    access_token TEXT NOT NULL,
-    refresh_token TEXT NOT NULL,
-    expires_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  );
-`);
+// Test connection on startup
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle database client", err);
+});
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS api_keys (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    key_hash TEXT UNIQUE NOT NULL,
-    key_prefix TEXT NOT NULL,
-    name TEXT,
-    is_active INTEGER DEFAULT 1,
-    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    assigned_to_email TEXT,
-    assigned_to_user_id TEXT,
-    assignment_status TEXT DEFAULT 'unassigned',
-    invitation_token TEXT UNIQUE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (assigned_to_user_id) REFERENCES users(id) ON DELETE SET NULL
-  );
-`);
+// Initialize database schema
+export async function initializeDatabase(): Promise<void> {
+  const client = await pool.connect();
+  try {
+    console.log("[DB] Initializing database schema...");
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS api_key_usage (
-    key_id TEXT PRIMARY KEY,
-    input_tokens INTEGER DEFAULT 0,
-    output_tokens INTEGER DEFAULT 0,
-    cache_creation_tokens INTEGER DEFAULT 0,
-    cache_read_tokens INTEGER DEFAULT 0,
-    total_tokens INTEGER DEFAULT 0,
-    total_cost REAL DEFAULT 0.0,
-    last_request_at INTEGER,
-    request_count INTEGER DEFAULT 0,
-    FOREIGN KEY (key_id) REFERENCES api_keys(id) ON DELETE CASCADE
-  );
-`);
+    // Create users table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(255) PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+      )
+    `);
 
-// Create indexes
-db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
-  CREATE INDEX IF NOT EXISTS idx_api_keys_assigned_to_user_id ON api_keys(assigned_to_user_id);
-  CREATE INDEX IF NOT EXISTS idx_api_keys_assigned_to_email ON api_keys(assigned_to_email);
-  CREATE INDEX IF NOT EXISTS idx_api_keys_invitation_token ON api_keys(invitation_token);
-  CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user_id ON oauth_tokens(user_id);
-`);
+    // Create oauth_tokens table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS oauth_tokens (
+        user_id VARCHAR(255) PRIMARY KEY,
+        access_token TEXT NOT NULL,
+        refresh_token TEXT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
 
-export default db;
+    // Create api_keys table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id VARCHAR(255) PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        key_hash VARCHAR(255) UNIQUE NOT NULL,
+        key_prefix VARCHAR(255) NOT NULL,
+        name VARCHAR(255),
+        is_active BOOLEAN DEFAULT true,
+        created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+        assigned_to_email VARCHAR(255),
+        assigned_to_user_id VARCHAR(255),
+        assignment_status VARCHAR(50) DEFAULT 'unassigned',
+        invitation_token VARCHAR(255) UNIQUE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (assigned_to_user_id) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    // Create api_key_usage table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS api_key_usage (
+        key_id VARCHAR(255) PRIMARY KEY,
+        input_tokens BIGINT DEFAULT 0,
+        output_tokens BIGINT DEFAULT 0,
+        cache_creation_tokens BIGINT DEFAULT 0,
+        cache_read_tokens BIGINT DEFAULT 0,
+        total_tokens BIGINT DEFAULT 0,
+        total_cost DECIMAL(10, 5) DEFAULT 0.0,
+        last_request_at BIGINT,
+        request_count INTEGER DEFAULT 0,
+        FOREIGN KEY (key_id) REFERENCES api_keys(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Create health_check table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS health_check (
+        id INTEGER PRIMARY KEY,
+        last_check BIGINT
+      )
+    `);
+
+    // Create indexes
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_api_keys_assigned_to_user_id ON api_keys(assigned_to_user_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_api_keys_assigned_to_email ON api_keys(assigned_to_email)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_api_keys_invitation_token ON api_keys(invitation_token)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user_id ON oauth_tokens(user_id)
+    `);
+
+    console.log("[DB] Database schema initialized successfully");
+  } catch (error) {
+    console.error("[DB] Failed to initialize database:", error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  await pool.end();
+  process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
+  await pool.end();
+  process.exit(0);
+});
+
+export default pool;
