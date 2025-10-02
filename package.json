@@ -4,7 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
-    "start": "bun run src/index.ts"
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:disconnect": "bun test tests/oauth-disconnect.test.ts",
+    "test:endpoint": "bun test tests/disconnect-endpoint.test.ts"
   },
   "dependencies": {
     "@openauthjs/openauth": "^0.4.3",

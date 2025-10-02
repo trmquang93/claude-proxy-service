@@ -147,8 +147,16 @@ app.get("/api/claude/status", authMiddleware, async (c) => {
 
 app.delete("/api/claude/disconnect", authMiddleware, async (c) => {
   const user = c.get("user");
-  await disconnectOAuth(user.userId);
+  console.log("[API] Disconnect request for user:", user.userId);
 
+  const result = await disconnectOAuth(user.userId);
+
+  if (!result.success) {
+    console.warn("[API] Disconnect failed - no OAuth connection found for user:", user.userId);
+    return c.json({ error: "No OAuth connection found to disconnect" }, 404);
+  }
+
+  console.log("[API] Disconnect successful for user:", user.userId);
   return c.json({ message: "Claude account disconnected" });
 });
 

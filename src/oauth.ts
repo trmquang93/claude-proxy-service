@@ -146,7 +146,14 @@ export async function saveOAuthTokens(userId: string, tokens: { access_token: st
 // Get OAuth tokens for user
 export async function getOAuthTokens(userId: string): Promise<OAuthToken | null> {
   try {
+    console.log("[OAuth] Getting tokens for user:", userId);
     const result = await pool.query("SELECT * FROM oauth_tokens WHERE user_id = $1", [userId]);
+    console.log("[OAuth] Query result - row count:", result.rows.length);
+    if (result.rows.length > 0) {
+      console.log("[OAuth] Token found for user:", userId);
+    } else {
+      console.log("[OAuth] No token found for user:", userId);
+    }
     return result.rows[0] as OAuthToken | null;
   } catch (error) {
     console.error("[DB] Failed to get OAuth tokens:", error);
@@ -212,15 +219,29 @@ export async function ensureValidToken(userId: string): Promise<{ success: boole
 
 // Check if user has connected Claude OAuth
 export async function hasOAuthConnection(userId: string): Promise<boolean> {
+  console.log("[OAuth] Checking connection for user:", userId);
   const tokens = await getOAuthTokens(userId);
-  return tokens !== null;
+  const isConnected = Boolean(tokens); // Fix: Use truthiness check instead of !== null
+  console.log("[OAuth] Connection status:", isConnected ? "CONNECTED" : "NOT CONNECTED");
+  return isConnected;
 }
 
 // Disconnect OAuth (remove tokens)
-export async function disconnectOAuth(userId: string): Promise<void> {
+export async function disconnectOAuth(userId: string): Promise<{ success: boolean; rowsDeleted: number }> {
   try {
-    await pool.query("DELETE FROM oauth_tokens WHERE user_id = $1", [userId]);
-    console.log("[DB] OAuth disconnected for user:", userId);
+    console.log("[DB] Attempting to disconnect OAuth for user:", userId);
+    const result = await pool.query("DELETE FROM oauth_tokens WHERE user_id = $1", [userId]);
+    const rowsDeleted = result.rowCount || 0;
+
+    console.log("[DB] OAuth disconnect result - Rows deleted:", rowsDeleted);
+
+    if (rowsDeleted === 0) {
+      console.warn("[DB] No OAuth tokens found to delete for user:", userId);
+      return { success: false, rowsDeleted: 0 };
+    }
+
+    console.log("[DB] OAuth successfully disconnected for user:", userId);
+    return { success: true, rowsDeleted };
   } catch (error) {
     console.error("[DB] Failed to disconnect OAuth:", error);
     throw error;
