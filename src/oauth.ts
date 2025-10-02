@@ -34,27 +34,70 @@ export async function generateAuthUrl(): Promise<{ url: string; verifier: string
 // Exchange authorization code for tokens
 export async function exchangeCode(code: string, verifier: string): Promise<{ success: boolean; tokens?: any; error?: string }> {
   try {
+    console.log("[OAuth] Starting token exchange");
+    console.log("[OAuth] Code format check - contains '#':", code.includes("#"));
+
     const splits = code.split("#");
+    const authCode = splits[0];
+    const state = splits[1];
+
+    console.log("[OAuth] Parsed code - length:", authCode?.length, "state:", state?.length || "none");
+
+    const requestBody = {
+      code: authCode,
+      state: state,
+      grant_type: "authorization_code",
+      client_id: CLIENT_ID,
+      redirect_uri: "https://console.anthropic.com/oauth/code/callback",
+      code_verifier: verifier,
+    };
+
+    console.log("[OAuth] Sending token exchange request to Anthropic");
     const response = await fetch("https://console.anthropic.com/v1/oauth/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        code: splits[0],
-        state: splits[1],
-        grant_type: "authorization_code",
-        client_id: CLIENT_ID,
-        redirect_uri: "https://console.anthropic.com/oauth/code/callback",
-        code_verifier: verifier,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log("[OAuth] Token exchange response status:", response.status, response.statusText);
+
     if (!response.ok) {
-      return { success: false, error: "Failed to exchange code" };
+      let errorDetails = "Unknown error";
+      try {
+        const errorBody = await response.text();
+        console.error("[OAuth] Token exchange failed with body:", errorBody);
+        errorDetails = errorBody;
+      } catch (e) {
+        console.error("[OAuth] Could not read error response body");
+      }
+      return {
+        success: false,
+        error: `OAuth token exchange failed: ${response.status} ${response.statusText} - ${errorDetails}`
+      };
     }
 
-    const tokens = await response.json();
+    let tokens;
+    try {
+      tokens = await response.json();
+      console.log("[OAuth] Token exchange successful, received fields:", Object.keys(tokens));
+    } catch (parseError) {
+      console.error("[OAuth] Failed to parse token response JSON:", parseError);
+      return { success: false, error: "Invalid JSON response from OAuth provider" };
+    }
+
+    // Validate required fields
+    if (!tokens.access_token || !tokens.refresh_token || !tokens.expires_in) {
+      console.error("[OAuth] Missing required token fields:", {
+        has_access_token: !!tokens.access_token,
+        has_refresh_token: !!tokens.refresh_token,
+        has_expires_in: !!tokens.expires_in
+      });
+      return { success: false, error: "OAuth response missing required fields" };
+    }
+
+    console.log("[OAuth] Token exchange completed successfully");
     return {
       success: true,
       tokens: {
@@ -64,16 +107,33 @@ export async function exchangeCode(code: string, verifier: string): Promise<{ su
       },
     };
   } catch (error) {
-    return { success: false, error: "Token exchange failed" };
+    console.error("[OAuth] Unexpected error during token exchange:", error);
+    return {
+      success: false,
+      error: `Token exchange failed: ${error instanceof Error ? error.message : String(error)}`
+    };
   }
 }
 
 // Save OAuth tokens for user
 export function saveOAuthTokens(userId: string, tokens: { access_token: string; refresh_token: string; expires_at: number }): void {
-  db.query(`
-    INSERT OR REPLACE INTO oauth_tokens (user_id, access_token, refresh_token, expires_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(userId, tokens.access_token, tokens.refresh_token, tokens.expires_at, Date.now());
+  try {
+    console.log("[DB] Saving OAuth tokens for user:", userId);
+
+    if (!tokens.access_token || !tokens.refresh_token || !tokens.expires_at) {
+      throw new Error("Invalid token data: missing required fields");
+    }
+
+    db.query(`
+      INSERT OR REPLACE INTO oauth_tokens (user_id, access_token, refresh_token, expires_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(userId, tokens.access_token, tokens.refresh_token, tokens.expires_at, Date.now());
+
+    console.log("[DB] OAuth tokens saved successfully for user:", userId);
+  } catch (error) {
+    console.error("[DB] Failed to save OAuth tokens:", error);
+    throw new Error(`Database error: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 // Get OAuth tokens for user

@@ -81,21 +81,61 @@ app.get("/api/claude/connect", authMiddleware, async (c) => {
 });
 
 app.post("/api/claude/callback", authMiddleware, async (c) => {
-  const user = c.get("user");
-  const { code, verifier } = await c.req.json();
+  try {
+    const user = c.get("user");
+    console.log(`[OAuth Callback] User ${user.userId} attempting to connect Claude account`);
 
-  if (!code || !verifier) {
-    return c.json({ error: "Code and verifier required" }, 400);
+    // Parse request body with error handling
+    let code: string;
+    let verifier: string;
+
+    try {
+      const body = await c.req.json();
+      code = body.code;
+      verifier = body.verifier;
+      console.log(`[OAuth Callback] Received code length: ${code?.length}, verifier length: ${verifier?.length}`);
+    } catch (parseError) {
+      console.error("[OAuth Callback] Failed to parse request body:", parseError);
+      return c.json({ error: "Invalid request body" }, 400);
+    }
+
+    if (!code || !verifier) {
+      console.error("[OAuth Callback] Missing required fields - code:", !!code, "verifier:", !!verifier);
+      return c.json({ error: "Code and verifier required" }, 400);
+    }
+
+    // Exchange code for tokens
+    console.log("[OAuth Callback] Exchanging authorization code for tokens");
+    const result = await exchangeCode(code, verifier);
+
+    if (!result.success) {
+      console.error("[OAuth Callback] Token exchange failed:", result.error);
+      return c.json({ error: result.error || "Failed to exchange authorization code" }, 400);
+    }
+
+    if (!result.tokens) {
+      console.error("[OAuth Callback] Token exchange succeeded but no tokens returned");
+      return c.json({ error: "No tokens received from OAuth provider" }, 500);
+    }
+
+    // Save tokens to database
+    console.log("[OAuth Callback] Saving OAuth tokens to database");
+    try {
+      saveOAuthTokens(user.userId, result.tokens);
+      console.log(`[OAuth Callback] Successfully connected Claude account for user ${user.userId}`);
+    } catch (dbError) {
+      console.error("[OAuth Callback] Database error while saving tokens:", dbError);
+      return c.json({ error: "Failed to save authentication tokens" }, 500);
+    }
+
+    return c.json({ message: "Claude account connected successfully" });
+  } catch (error) {
+    console.error("[OAuth Callback] Unexpected error:", error);
+    return c.json({
+      error: "Internal server error during OAuth callback",
+      details: error instanceof Error ? error.message : String(error)
+    }, 500);
   }
-
-  const result = await exchangeCode(code, verifier);
-  if (!result.success) {
-    return c.json({ error: result.error }, 400);
-  }
-
-  saveOAuthTokens(user.userId, result.tokens);
-
-  return c.json({ message: "Claude account connected successfully" });
 });
 
 app.get("/api/claude/status", authMiddleware, async (c) => {
@@ -303,7 +343,48 @@ app.post("/v1/messages", async (c) => {
 
 // Health check
 app.get("/health", (c) => {
-  return c.json({ status: "ok" });
+  try {
+    // Test database read
+    const testRead = db.query("SELECT 1 as test").get();
+
+    // Test database write
+    const testTableExists = db.query(`
+      SELECT name FROM sqlite_master WHERE type='table' AND name='health_check'
+    `).get();
+
+    if (!testTableExists) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS health_check (
+          id INTEGER PRIMARY KEY,
+          last_check INTEGER
+        )
+      `);
+    }
+
+    db.query(`
+      INSERT OR REPLACE INTO health_check (id, last_check) VALUES (1, ?)
+    `).run(Date.now());
+
+    return c.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      database: {
+        readable: true,
+        writable: true
+      }
+    });
+  } catch (error) {
+    console.error("[Health Check] Error:", error);
+    return c.json({
+      status: "degraded",
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : String(error),
+      database: {
+        readable: false,
+        writable: false
+      }
+    }, 500);
+  }
 });
 
 const port = parseInt(process.env.PORT || "3000");
