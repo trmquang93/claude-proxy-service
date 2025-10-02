@@ -48,6 +48,12 @@
             margin-bottom: 20px;
             font-size: 20px;
         }
+        h3 {
+            color: #555;
+            margin: 25px 0 15px 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
         .status {
             display: inline-block;
             padding: 6px 12px;
@@ -63,6 +69,26 @@
             background: #ffebee;
             color: #c62828;
         }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        .badge.pending {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        .badge.accepted {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .badge.unassigned {
+            background: #f5f5f5;
+            color: #666;
+        }
         button {
             padding: 12px 24px;
             border: none;
@@ -72,21 +98,31 @@
             cursor: pointer;
             transition: all 0.3s;
         }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
         .btn-danger {
             background: #e53935;
             color: white;
+            padding: 8px 16px;
+            font-size: 13px;
         }
         .btn-secondary {
             background: #f5f5f5;
             color: #333;
+        }
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
         }
         .btn-logout {
             background: rgba(255,255,255,0.2);
@@ -135,25 +171,153 @@
         }
         .key-item {
             background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border: 1px solid #e0e0e0;
+        }
+        .key-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .key-info {
+            flex: 1;
+        }
+        .key-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .key-prefix {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #333;
+            font-weight: 600;
+        }
+        .key-meta {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+        .key-assignment {
+            font-size: 13px;
+            color: #555;
+            margin-top: 8px;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+        }
+        .usage-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+        }
+        .usage-stat {
+            text-align: center;
+        }
+        .usage-stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #667eea;
+        }
+        .usage-stat-label {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+            text-transform: uppercase;
+        }
+        .aggregate-usage {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .aggregate-usage h3 {
+            color: white;
+            margin: 0 0 15px 0;
+        }
+        .aggregate-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+        }
+        .aggregate-stat {
+            text-align: center;
+        }
+        .aggregate-stat-value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .aggregate-stat-label {
+            font-size: 11px;
+            opacity: 0.9;
+            margin-top: 4px;
+            text-transform: uppercase;
+        }
+        .invitation-item {
+            background: #fff8e1;
             padding: 15px;
             border-radius: 6px;
             margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border: 1px solid #ffe082;
         }
-        .key-info {
+        .invitation-info {
             flex: 1;
         }
-        .key-prefix {
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            color: #666;
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
         }
-        .key-meta {
-            font-size: 12px;
-            color: #999;
-            margin-top: 5px;
+        .modal.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+        }
+        .modal-content h3 {
+            margin: 0 0 20px 0;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
         }
         .section {
             display: none;
@@ -174,6 +338,11 @@
         }
         .oauth-instructions li {
             margin: 8px 0;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
         }
     </style>
 </head>
@@ -213,20 +382,44 @@
             </div>
         </div>
 
+        <!-- Pending Invitations Section (Always visible if invitations exist) -->
+        <div class="card" id="invitations-card" style="display: none;">
+            <h2>Pending Invitations</h2>
+            <p style="color: #666; margin-bottom: 20px;">You have been invited to use API keys from other team members.</p>
+            <div id="invitations-list"></div>
+        </div>
+
         <!-- API Key Management Section -->
         <div class="card" id="api-key-section" style="display: none;">
             <h2>API Keys</h2>
-            <button class="btn-primary" onclick="generateKey()">Generate New API Key</button>
 
-            <div id="new-key-display" style="display: none;" class="key-display">
-                <strong style="color: #c62828;">⚠️ Save this key now - it will only be shown once!</strong>
-                <div class="key-value" id="new-key-value"></div>
-                <button class="btn-secondary" onclick="copyKey()">Copy to Clipboard</button>
+            <!-- Only for users with OAuth -->
+            <div id="generate-key-container" style="display: none;">
+                <button class="btn-primary" onclick="generateKey()">Generate New API Key</button>
+
+                <div id="new-key-display" style="display: none;" class="key-display">
+                    <strong style="color: #c62828;">⚠️ Save this key now - it will only be shown once!</strong>
+                    <div class="key-value" id="new-key-value"></div>
+                    <button class="btn-secondary" onclick="copyKey()">Copy to Clipboard</button>
+                </div>
             </div>
 
-            <div class="keys-list">
-                <h3 style="margin: 20px 0 10px 0; color: #666; font-size: 16px;">Your API Keys</h3>
-                <div id="keys-list-content"></div>
+            <!-- Only for users with OAuth -->
+            <div id="owned-keys-container" style="display: none;">
+                <!-- Aggregate Usage Stats -->
+                <div id="aggregate-usage-section"></div>
+
+                <!-- Owned Keys -->
+                <div class="keys-list">
+                    <h3>My API Keys</h3>
+                    <div id="owned-keys-list"></div>
+                </div>
+            </div>
+
+            <!-- For users with assigned keys (OAuth not required) -->
+            <div class="keys-list" id="assigned-keys-section" style="display: none;">
+                <h3>Keys Assigned to Me</h3>
+                <div id="assigned-keys-list"></div>
             </div>
         </div>
 
@@ -249,10 +442,26 @@
         </div>
     </div>
 
+    <!-- Assign Key Modal -->
+    <div id="assign-modal" class="modal">
+        <div class="modal-content">
+            <h3>Assign API Key</h3>
+            <div class="form-group">
+                <label for="assign-email">Email Address:</label>
+                <input type="email" id="assign-email" placeholder="user@example.com" />
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeAssignModal()">Cancel</button>
+                <button class="btn-primary" onclick="submitAssignment()">Send Invitation</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '';
         let authToken = localStorage.getItem('token');
         let currentVerifier = null;
+        let assigningKeyId = null;
 
         if (!authToken) {
             window.location.href = '/';
@@ -276,6 +485,16 @@
             return response;
         }
 
+        function formatTokens(tokens) {
+            if (tokens >= 1000000) return (tokens / 1000000).toFixed(2) + 'M';
+            if (tokens >= 1000) return (tokens / 1000).toFixed(1) + 'K';
+            return tokens.toString();
+        }
+
+        function formatCost(cost) {
+            return '$' + cost.toFixed(3);
+        }
+
         async function checkOAuthStatus() {
             const response = await apiCall('/api/claude/status');
             const data = await response.json();
@@ -283,25 +502,24 @@
             const statusEl = document.getElementById('oauth-status');
             const connectSection = document.getElementById('connect-section');
             const connectedSection = document.getElementById('connected-section');
-            const apiKeySection = document.getElementById('api-key-section');
-            const usageSection = document.getElementById('usage-section');
 
             if (data.connected) {
                 statusEl.textContent = 'Connected';
                 statusEl.className = 'status connected';
                 connectSection.classList.remove('active');
                 connectedSection.classList.add('active');
-                apiKeySection.style.display = 'block';
-                usageSection.style.display = 'block';
-                loadApiKeys();
             } else {
                 statusEl.textContent = 'Not Connected';
                 statusEl.className = 'status disconnected';
                 connectSection.classList.add('active');
                 connectedSection.classList.remove('active');
-                apiKeySection.style.display = 'none';
-                usageSection.style.display = 'none';
             }
+
+            // Always load API keys (will handle visibility based on OAuth + assigned keys)
+            await loadApiKeys(data.connected);
+
+            // Always check for pending invitations regardless of OAuth status
+            loadPendingInvitations();
         }
 
         async function connectClaude() {
@@ -311,11 +529,8 @@
                 const data = await response.json();
 
                 currentVerifier = data.verifier;
-
-                // Open OAuth URL in new window
                 window.open(data.url, '_blank');
 
-                // Wait a bit then prompt for code
                 setTimeout(() => {
                     const code = prompt('Paste the authorization code from the callback page:');
                     if (code) {
@@ -396,32 +611,243 @@
             }
         }
 
-        async function loadApiKeys() {
+        function renderUsageStats(usage) {
+            return `
+                <div class="usage-stats">
+                    <div class="usage-stat">
+                        <div class="usage-stat-value">${formatTokens(usage.input_tokens)}</div>
+                        <div class="usage-stat-label">Input Tokens</div>
+                    </div>
+                    <div class="usage-stat">
+                        <div class="usage-stat-value">${formatTokens(usage.output_tokens)}</div>
+                        <div class="usage-stat-label">Output Tokens</div>
+                    </div>
+                    <div class="usage-stat">
+                        <div class="usage-stat-value">${formatTokens(usage.cache_creation_tokens)}</div>
+                        <div class="usage-stat-label">Cache Write</div>
+                    </div>
+                    <div class="usage-stat">
+                        <div class="usage-stat-value">${formatTokens(usage.cache_read_tokens)}</div>
+                        <div class="usage-stat-label">Cache Read</div>
+                    </div>
+                    <div class="usage-stat">
+                        <div class="usage-stat-value">${formatCost(usage.total_cost)}</div>
+                        <div class="usage-stat-label">Total Cost</div>
+                    </div>
+                    <div class="usage-stat">
+                        <div class="usage-stat-value">${usage.request_count}</div>
+                        <div class="usage-stat-label">Requests</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadApiKeys(hasOAuth = false) {
             try {
                 const response = await apiCall('/api/keys/list');
                 const data = await response.json();
 
-                const listEl = document.getElementById('keys-list-content');
+                const hasOwnedKeys = data.owned && data.owned.length > 0;
+                const hasAssignedKeys = data.assigned && data.assigned.length > 0;
 
-                if (data.keys.length === 0) {
-                    listEl.innerHTML = '<p style="color: #999;">No API keys yet. Generate one to get started!</p>';
-                    return;
-                }
+                // Show API key section if has OAuth OR has assigned keys
+                const apiKeySection = document.getElementById('api-key-section');
+                apiKeySection.style.display = (hasOAuth || hasAssignedKeys) ? 'block' : 'none';
 
-                listEl.innerHTML = data.keys.map(key => `
-                    <div class="key-item">
-                        <div class="key-info">
-                            <div class="key-prefix">${key.prefix}</div>
-                            <div class="key-meta">
-                                Created: ${new Date(key.created_at * 1000).toLocaleDateString()}
-                                ${key.is_active ? '<span style="color: #2e7d32;">● Active</span>' : '<span style="color: #999;">● Inactive</span>'}
+                // Show generate/owned sections only if has OAuth
+                const generateKeyContainer = document.getElementById('generate-key-container');
+                const ownedKeysContainer = document.getElementById('owned-keys-container');
+                generateKeyContainer.style.display = hasOAuth ? 'block' : 'none';
+                ownedKeysContainer.style.display = hasOAuth ? 'block' : 'none';
+
+                // Show usage section if has OAuth OR assigned keys
+                const usageSection = document.getElementById('usage-section');
+                usageSection.style.display = (hasOAuth || hasAssignedKeys) ? 'block' : 'none';
+
+                // Render aggregate usage
+                if (data.owned && data.owned.length > 0) {
+                    const aggregateEl = document.getElementById('aggregate-usage-section');
+                    aggregateEl.innerHTML = `
+                        <div class="aggregate-usage">
+                            <h3>Total Usage (All My Keys)</h3>
+                            <div class="aggregate-stats">
+                                <div class="aggregate-stat">
+                                    <div class="aggregate-stat-value">${formatTokens(data.aggregate_usage.input_tokens)}</div>
+                                    <div class="aggregate-stat-label">Input Tokens</div>
+                                </div>
+                                <div class="aggregate-stat">
+                                    <div class="aggregate-stat-value">${formatTokens(data.aggregate_usage.output_tokens)}</div>
+                                    <div class="aggregate-stat-label">Output Tokens</div>
+                                </div>
+                                <div class="aggregate-stat">
+                                    <div class="aggregate-stat-value">${formatTokens(data.aggregate_usage.total_tokens)}</div>
+                                    <div class="aggregate-stat-label">Total Tokens</div>
+                                </div>
+                                <div class="aggregate-stat">
+                                    <div class="aggregate-stat-value">${formatCost(data.aggregate_usage.total_cost)}</div>
+                                    <div class="aggregate-stat-label">Total Cost</div>
+                                </div>
                             </div>
                         </div>
-                        <button class="btn-danger" onclick="deleteKey('${key.id}')">Delete</button>
-                    </div>
-                `).join('');
+                    `;
+                }
+
+                // Render owned keys
+                const ownedListEl = document.getElementById('owned-keys-list');
+                if (!data.owned || data.owned.length === 0) {
+                    ownedListEl.innerHTML = '<div class="empty-state">No API keys yet. Generate one to get started!</div>';
+                } else {
+                    ownedListEl.innerHTML = data.owned.map(key => {
+                        let assignmentBadge = '';
+                        let assignmentInfo = '';
+
+                        if (key.assignment_status === 'pending') {
+                            assignmentBadge = '<span class="badge pending">Pending</span>';
+                            assignmentInfo = `<div class="key-assignment">📧 Invited: ${key.assigned_to_email}</div>`;
+                        } else if (key.assignment_status === 'accepted') {
+                            assignmentBadge = '<span class="badge accepted">Assigned</span>';
+                            assignmentInfo = `<div class="key-assignment">👤 Assigned to: ${key.assigned_to_email}</div>`;
+                        } else {
+                            assignmentBadge = '<span class="badge unassigned">Unassigned</span>';
+                        }
+
+                        return `
+                            <div class="key-item">
+                                <div class="key-header">
+                                    <div class="key-info">
+                                        <div class="key-prefix">${key.prefix} ${assignmentBadge}</div>
+                                        <div class="key-meta">
+                                            Created: ${new Date(key.created_at * 1000).toLocaleDateString()}
+                                            ${key.is_active ? '<span style="color: #2e7d32;">● Active</span>' : '<span style="color: #999;">● Inactive</span>'}
+                                        </div>
+                                        ${assignmentInfo}
+                                    </div>
+                                    <div class="key-actions">
+                                        ${key.assignment_status === 'unassigned' ? `<button class="btn-secondary btn-small" onclick="openAssignModal('${key.id}')">Assign</button>` : ''}
+                                        <button class="btn-danger btn-small" onclick="deleteKey('${key.id}')">Delete</button>
+                                    </div>
+                                </div>
+                                ${renderUsageStats(key.usage)}
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                // Render assigned keys
+                const assignedSection = document.getElementById('assigned-keys-section');
+                const assignedListEl = document.getElementById('assigned-keys-list');
+                if (data.assigned && data.assigned.length > 0) {
+                    assignedSection.style.display = 'block';
+                    assignedListEl.innerHTML = data.assigned.map(key => `
+                        <div class="key-item">
+                            <div class="key-header">
+                                <div class="key-info">
+                                    <div class="key-prefix">${key.prefix}</div>
+                                    <div class="key-meta">
+                                        Created: ${new Date(key.created_at * 1000).toLocaleDateString()}
+                                        ${key.is_active ? '<span style="color: #2e7d32;">● Active</span>' : '<span style="color: #999;">● Inactive</span>'}
+                                    </div>
+                                    <div class="key-assignment">👤 Provider: ${key.owner_email}</div>
+                                </div>
+                            </div>
+                            ${renderUsageStats(key.usage)}
+                        </div>
+                    `).join('');
+                } else {
+                    assignedSection.style.display = 'none';
+                }
+
             } catch (error) {
                 console.error('Failed to load keys', error);
+            }
+        }
+
+        async function loadPendingInvitations() {
+            try {
+                const response = await apiCall('/api/keys/list');
+                const data = await response.json();
+
+                const invitationsCard = document.getElementById('invitations-card');
+                const invitationsListEl = document.getElementById('invitations-list');
+
+                if (data.pending_invitations && data.pending_invitations.length > 0) {
+                    invitationsCard.style.display = 'block';
+                    invitationsListEl.innerHTML = data.pending_invitations.map(inv => `
+                        <div class="invitation-item">
+                            <div class="invitation-info">
+                                <strong>API Key Invitation</strong>
+                                <div style="font-size: 13px; color: #666; margin-top: 4px;">
+                                    From: ${inv.owner_email}
+                                </div>
+                            </div>
+                            <button class="btn-primary btn-small" onclick="acceptInvitation('${inv.invitation_token}')">Accept</button>
+                        </div>
+                    `).join('');
+                } else {
+                    invitationsCard.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to load invitations', error);
+            }
+        }
+
+        function openAssignModal(keyId) {
+            assigningKeyId = keyId;
+            document.getElementById('assign-email').value = '';
+            document.getElementById('assign-modal').classList.add('active');
+        }
+
+        function closeAssignModal() {
+            assigningKeyId = null;
+            document.getElementById('assign-modal').classList.remove('active');
+        }
+
+        async function submitAssignment() {
+            const email = document.getElementById('assign-email').value.trim();
+
+            if (!email) {
+                showMessage('Please enter an email address', 'error');
+                return;
+            }
+
+            try {
+                const response = await apiCall(`/api/keys/${assigningKeyId}/assign`, {
+                    method: 'POST',
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage(data.message, 'success');
+                    closeAssignModal();
+                    loadApiKeys();
+                    loadPendingInvitations();
+                } else {
+                    showMessage(data.error || 'Failed to assign key', 'error');
+                }
+            } catch (error) {
+                showMessage('Network error', 'error');
+            }
+        }
+
+        async function acceptInvitation(token) {
+            try {
+                const response = await apiCall(`/api/keys/accept-invitation/${token}`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage('Invitation accepted successfully!', 'success');
+                    loadPendingInvitations();
+                    loadApiKeys();
+                } else {
+                    showMessage(data.error || 'Failed to accept invitation', 'error');
+                }
+            } catch (error) {
+                showMessage('Network error', 'error');
             }
         }
 
