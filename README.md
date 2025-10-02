@@ -151,6 +151,66 @@ bun run start
 └─────────────┘      └──────────────────┘      └─────────────────┘
 ```
 
+## Deployment
+
+### Deploy to Railway
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/your-template-id)
+
+1. **Prerequisites**:
+   - GitHub repository with this code
+   - Railway account (free tier available)
+
+2. **Deployment Steps**:
+
+   a. **Connect Repository**:
+   - Go to [Railway Dashboard](https://railway.app/dashboard)
+   - Click "New Project"
+   - Select "Deploy from GitHub repo"
+   - Choose your `claude-proxy-service` repository
+
+   b. **Configure Environment Variables**:
+   - `JWT_SECRET`: Generate secure random string (e.g., `openssl rand -base64 32`)
+   - `CLAUDE_CLIENT_ID`: `9d1c250a-e61b-44d9-88ed-5944d1962f5e`
+   - `PORT`: Not needed (Railway auto-provides)
+   - `NODE_ENV`: `production`
+
+   c. **Add Persistent Volume**:
+   - In Railway dashboard, go to your service settings
+   - Click "Variables" → "Volumes"
+   - Add volume:
+     - Mount Path: `/app/database.db`
+     - Size: 512 MB (or more if needed)
+
+   d. **Deploy**:
+   - Railway will automatically build and deploy
+   - Your service will be available at `https://your-service.up.railway.app`
+
+3. **Post-Deployment**:
+   - Update your application's allowed origins if needed
+   - Test the endpoints using your Railway URL
+   - Monitor logs in Railway dashboard
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+```bash
+cp .env.example .env
+```
+
+Required variables:
+- `JWT_SECRET` - Secret key for JWT token signing
+- `CLAUDE_CLIENT_ID` - Anthropic OAuth client ID
+- `PORT` - Server port (default: 3000)
+
+### Costs
+
+Railway offers:
+- **Free Tier**: $5 credits, then $1/month
+- 0.5 GB RAM, 1 vCPU, 0.5 GB storage
+- Perfect for small teams
+
 ## License
 
 MIT

@@ -9,7 +9,12 @@ import { proxyToClaudeAPI } from "./proxy";
 const app = new Hono();
 
 // Enable CORS
-app.use("/*", cors());
+app.use("/*", cors({
+  origin: process.env.NODE_ENV === "production"
+    ? [/railway\.app$/, /claude-proxy-service\.up\.railway\.app$/]
+    : "*",
+  credentials: true,
+}));
 
 // Serve static files
 app.use("/public/*", serveStatic({ root: "./" }));
