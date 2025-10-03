@@ -3,9 +3,11 @@ import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
 import { registerUser, loginUser, verifyToken } from "./auth";
 import { generateAuthUrl, exchangeCode, saveOAuthTokens, hasOAuthConnection, disconnectOAuth } from "./oauth";
-import { generateApiKey, listApiKeys, deleteApiKey, assignKey, acceptInvitation, getPendingInvitations, listAllUserKeys } from "./keys";
+import { generateApiKey, listApiKeys, deleteApiKey, assignKey, acceptInvitation, getPendingInvitations, listAllUserKeys, getUserPlan, updateUserPlan } from "./keys";
 import { proxyToClaudeAPI } from "./proxy";
 import { getKeyUsage, getAggregateUsage } from "./usage";
+import { getRollingWindowUsage, calculateUsagePercentage, formatDuration } from "./quota";
+import { PLAN_LIMITS } from "./limits";
 import pool, { initializeDatabase } from "./db";
 
 const app = new Hono();
@@ -350,6 +352,159 @@ app.get("/api/keys/:id/usage", authMiddleware, async (c) => {
   }});
 });
 
+// Get quota status for specific key
+app.get("/api/keys/:id/quota", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const keyId = c.req.param("id");
+
+  // Verify user has access to this key (either owner or assigned user) and get owner's user_id
+  const keyResult = await pool.query(
+    `SELECT user_id FROM api_keys
+     WHERE id = $1
+     AND (user_id = $2 OR assigned_to_user_id = $3)
+     AND is_active = true`,
+    [keyId, user.userId, user.userId]
+  );
+  const key = keyResult.rows[0];
+
+  if (!key) {
+    return c.json({ error: "Key not found or access denied" }, 404);
+  }
+
+  // Get plan type from the key owner (user who owns the OAuth connection)
+  const ownerResult = await pool.query(
+    `SELECT plan_type FROM users WHERE id = $1`,
+    [key.user_id]
+  );
+  const planType = ownerResult.rows[0]?.plan_type || "pro";
+  const planLimits = PLAN_LIMITS[planType];
+  const usage = await getRollingWindowUsage(keyId, planLimits.windowHours);
+  const percentages = calculateUsagePercentage(usage, planType);
+
+  return c.json({
+    quota: {
+      plan: planType,
+      usage: {
+        credits: usage.currentCredits,
+        requests: usage.currentRequests,
+        cost: usage.currentCost,
+      },
+      percentages: {
+        credits: percentages.creditPercentage,
+        requests: percentages.requestPercentage,
+        overall: percentages.maxPercentage,
+        isOverLimit: percentages.isOverLimit,
+      },
+      limits: {
+        creditsPerWindow: planLimits.creditsPerWindow,
+        windowHours: planLimits.windowHours,
+        maxRequestsPerMinute: planLimits.maxRequestsPerMinute,
+      },
+      reset: {
+        nextResetAt: new Date(usage.nextResetAt).toISOString(),
+        timeUntilResetMs: usage.timeUntilResetMs,
+        timeUntilResetHuman: formatDuration(usage.timeUntilResetMs),
+      },
+      modelBreakdown: usage.modelBreakdown,
+    },
+  });
+});
+
+// Get aggregate quota overview for all owned keys
+app.get("/api/quota/overview", authMiddleware, async (c) => {
+  const user = c.get("user");
+
+  // Get user's plan type
+  const userPlanResult = await getUserPlan(user.userId);
+  const userPlanType = userPlanResult.planType || "pro";
+
+  // Get all owned keys (not assigned keys)
+  const keysResult = await pool.query(
+    `SELECT id, name, key_prefix FROM api_keys
+     WHERE user_id = $1 AND is_active = true`,
+    [user.userId]
+  );
+  const keys = keysResult.rows;
+
+  if (keys.length === 0) {
+    return c.json({
+      overview: {
+        totalKeys: 0,
+        aggregateUsage: { credits: 0, requests: 0, cost: 0 },
+        keys: [],
+      },
+    });
+  }
+
+  // Get quota for each key (all use user's plan)
+  const keyQuotas = await Promise.all(
+    keys.map(async (key) => {
+      const planType = userPlanType;
+      const planLimits = PLAN_LIMITS[planType];
+      const usage = await getRollingWindowUsage(key.id, planLimits.windowHours);
+      const percentages = calculateUsagePercentage(usage, planType);
+
+      return {
+        keyId: key.id,
+        keyPrefix: key.key_prefix,
+        name: key.name,
+        plan: planType,
+        credits: usage.currentCredits,
+        requests: usage.currentRequests,
+        cost: usage.currentCost,
+        percentage: percentages.maxPercentage,
+        isOverLimit: percentages.isOverLimit,
+      };
+    })
+  );
+
+  // Calculate aggregate
+  const aggregateUsage = {
+    credits: keyQuotas.reduce((sum, k) => sum + k.credits, 0),
+    requests: keyQuotas.reduce((sum, k) => sum + k.requests, 0),
+    cost: keyQuotas.reduce((sum, k) => sum + k.cost, 0),
+  };
+
+  return c.json({
+    overview: {
+      totalKeys: keys.length,
+      aggregateUsage,
+      keys: keyQuotas,
+    },
+  });
+});
+
+// Get current user's plan
+app.get("/api/user/plan", authMiddleware, async (c) => {
+  const user = c.get("user");
+
+  const result = await getUserPlan(user.userId);
+
+  if (!result.success) {
+    return c.json({ error: result.error }, 500);
+  }
+
+  return c.json({ plan: result.planType });
+});
+
+// Update current user's plan
+app.patch("/api/user/plan", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json();
+
+  if (!body.plan) {
+    return c.json({ error: "Plan type is required" }, 400);
+  }
+
+  const result = await updateUserPlan(user.userId, body.plan);
+
+  if (!result.success) {
+    return c.json({ error: result.error }, 400);
+  }
+
+  return c.json({ message: "Plan updated successfully" });
+});
+
 // Proxy endpoint (public - uses API key)
 app.post("/v1/messages", async (c) => {
   return proxyToClaudeAPI(c.req.raw);
@@ -402,6 +557,9 @@ initializeDatabase()
     console.error("Failed to initialize database:", error);
     process.exit(1);
   });
+
+// Export app for testing
+export { app };
 
 export default {
   port,

@@ -1,5 +1,6 @@
 import pool from "./db";
 import { calculateCost } from "./pricing";
+import { calculateCreditsUsed } from "./limits";
 
 export interface KeyUsage {
   key_id: string;
@@ -49,8 +50,37 @@ export async function updateKeyUsage(keyId: string, usage: UsageUpdate): Promise
       cache_read_input_tokens: cacheRead,
     });
 
-    const now = Math.floor(Date.now() / 1000);
+    // Calculate credits using model weight
+    const creditsUsed = calculateCreditsUsed(usage.model, totalTokens);
 
+    // Get current timestamp in milliseconds
+    const timestampMs = Date.now();
+
+    // Timestamp for aggregate table (seconds)
+    const now = Math.floor(timestampMs / 1000);
+
+    // Insert into api_key_usage_history table for detailed tracking
+    await pool.query(
+      `INSERT INTO api_key_usage_history
+       (key_id, timestamp, model, input_tokens, output_tokens,
+        cache_creation_tokens, cache_read_tokens, total_tokens,
+        cost, credits_used)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        keyId,
+        timestampMs,
+        usage.model,
+        usage.input_tokens,
+        usage.output_tokens,
+        cacheCreation,
+        cacheRead,
+        totalTokens,
+        totalCost,
+        creditsUsed
+      ]
+    );
+
+    // Update aggregate api_key_usage table (backward compatibility)
     await pool.query(
       `UPDATE api_key_usage
        SET

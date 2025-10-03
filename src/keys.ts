@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { randomBytes, randomUUID } from "crypto";
 import pool from "./db";
 import { initializeKeyUsage } from "./usage";
+import { PlanType } from "./limits";
 
 export interface ApiKey {
   id: string;
@@ -257,5 +258,54 @@ export async function listAllUserKeys(userId: string): Promise<{ owned: ApiKey[]
   } catch (error) {
     console.error("[Keys] List all user keys error:", error);
     return { owned: [], assigned: [] };
+  }
+}
+
+// Get user's plan type
+export async function getUserPlan(userId: string): Promise<{ success: boolean; planType?: PlanType; error?: string }> {
+  try {
+    const result = await pool.query(
+      "SELECT plan_type FROM users WHERE id = $1",
+      [userId]
+    );
+
+    const user = result.rows[0] as { plan_type: string | null } | undefined;
+
+    if (!user) {
+      return { success: false, error: "User not found" };
+    }
+
+    // Default to 'pro' if plan_type is null
+    const planType = (user.plan_type || "pro") as PlanType;
+
+    return { success: true, planType };
+  } catch (error) {
+    console.error("[Keys] Get user plan error:", error);
+    return { success: false, error: "Failed to get user plan" };
+  }
+}
+
+// Update user's plan type
+export async function updateUserPlan(userId: string, planType: PlanType): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Validate plan type
+    const validPlans: PlanType[] = ["free", "pro", "max-5x", "max-20x"];
+    if (!validPlans.includes(planType)) {
+      return { success: false, error: "Invalid plan type. Must be one of: free, pro, max-5x, max-20x" };
+    }
+
+    const result = await pool.query(
+      "UPDATE users SET plan_type = $1 WHERE id = $2",
+      [planType, userId]
+    );
+
+    if ((result.rowCount || 0) === 0) {
+      return { success: false, error: "User not found" };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("[Keys] Update user plan error:", error);
+    return { success: false, error: "Failed to update user plan" };
   }
 }

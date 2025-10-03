@@ -386,6 +386,107 @@
             display: flex;
             gap: 8px;
         }
+        .quota-section {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+        }
+        .quota-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .quota-progress-container {
+            width: 100%;
+            height: 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .quota-progress-bar {
+            height: 100%;
+            transition: width 0.3s, background-color 0.3s;
+            border-radius: 4px;
+        }
+        .quota-progress-bar.safe { background: linear-gradient(90deg, #4caf50, #66bb6a); }
+        .quota-progress-bar.warning { background: linear-gradient(90deg, #ffa726, #ffb74d); }
+        .quota-progress-bar.caution { background: linear-gradient(90deg, #ff9800, #ffa726); }
+        .quota-progress-bar.critical { background: linear-gradient(90deg, #f44336, #e57373); }
+        .plan-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .plan-badge.free { background: #e0e0e0; color: #555; }
+        .plan-badge.pro { background: #e3f2fd; color: #1976d2; }
+        .plan-badge.max-5x { background: #f3e5f5; color: #7b1fa2; }
+        .plan-badge.max-20x { background: #fce4ec; color: #c2185b; }
+        .quota-alert {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .quota-alert.high { background: #fff3e0; color: #e65100; }
+        .quota-alert.exceeded { background: #ffebee; color: #c62828; }
+        .model-breakdown {
+            margin-top: 15px;
+            padding: 12px;
+            background: #fafafa;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .model-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .model-item:last-child { border-bottom: none; }
+        .model-mini-bar {
+            flex: 1;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            margin: 0 10px;
+            overflow: hidden;
+        }
+        .model-mini-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+        .aggregate-quota-overview {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .quota-warnings {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .quota-warning-item {
+            background: rgba(255, 152, 0, 0.2);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -431,6 +532,24 @@
                 </div>
                 <div id="connected-section" class="section">
                     <p style="color: #2e7d32; margin: 15px 0;">Your Claude account is connected!</p>
+
+                    <div style="margin: 20px 0;">
+                        <h3 style="margin-bottom: 10px;">Plan Type</h3>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <span class="plan-badge" id="current-plan-badge" style="font-size: 14px; padding: 8px 16px;">Loading...</span>
+                            <select id="plan-selector" style="padding: 8px; border-radius: 6px; border: 1px solid #ddd; font-size: 14px;">
+                                <option value="free">Free</option>
+                                <option value="pro">Pro</option>
+                                <option value="max-5x">Max 5x</option>
+                                <option value="max-20x">Max 20x</option>
+                            </select>
+                            <button class="btn-primary btn-small" onclick="updateUserPlan()">Update Plan</button>
+                        </div>
+                        <p style="font-size: 12px; color: #666; margin-top: 8px;">
+                            Note: Changing your plan will affect all API keys you've generated
+                        </p>
+                    </div>
+
                     <button class="btn-danger" onclick="disconnectClaude()">Disconnect</button>
                 </div>
             </div>
@@ -517,6 +636,7 @@
         let currentVerifier = null;
         let assigningKeyId = null;
         let hasOAuthConnection = false;
+        let currentUserPlan = 'pro';
 
         if (!authToken) {
             window.location.href = '/';
@@ -554,6 +674,158 @@
             return '$' + num.toFixed(3);
         }
 
+        function formatNumber(num) {
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        // Fetch quota for a specific key
+        async function fetchQuota(keyId) {
+            try {
+                const response = await apiCall(`/api/keys/${keyId}/quota`);
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (error) {
+                console.error(`Failed to fetch quota for key ${keyId}:`, error);
+                return null;
+            }
+        }
+
+        // Render model breakdown
+        function renderModelBreakdown(breakdown) {
+            if (!breakdown || breakdown.length === 0) return '';
+
+            return `
+                <details class="model-breakdown">
+                    <summary style="cursor: pointer; font-weight: 600; margin-bottom: 10px;">
+                        Model Credit Breakdown
+                    </summary>
+                    ${breakdown.map(model => `
+                        <div class="model-item">
+                            <span style="font-weight: 500;">${model.model}</span>
+                            <div class="model-mini-bar">
+                                <div class="model-mini-fill" style="width: ${model.percentage}%"></div>
+                            </div>
+                            <span style="color: #999;">${formatNumber(model.credits)} (${model.percentage}%)</span>
+                        </div>
+                    `).join('')}
+                </details>
+            `;
+        }
+
+        // Render quota section
+        function renderQuotaSection(quota) {
+            if (!quota) return '';
+
+            const percentage = quota.percentages.overall;
+            const isOverLimit = quota.percentages.isOverLimit;
+
+            let statusClass = 'safe';
+            let alertBadge = '';
+
+            if (percentage >= 95) {
+                statusClass = 'critical';
+                alertBadge = '<span class="quota-alert exceeded">🚫 Quota Exceeded</span>';
+            } else if (percentage >= 80) {
+                statusClass = 'caution';
+                alertBadge = '<span class="quota-alert high">⚠️ High Usage</span>';
+            } else if (percentage >= 60) {
+                statusClass = 'warning';
+            }
+
+            const planBadgeClass = quota.plan || 'pro';
+
+            return `
+                <div class="quota-section">
+                    <div class="quota-header">
+                        <span class="plan-badge ${planBadgeClass}">${quota.plan}</span>
+                        ${alertBadge}
+                    </div>
+                    <div style="margin: 10px 0; font-size: 13px; color: #666;">
+                        <strong>${formatNumber(quota.usage.credits)}</strong> / ${formatNumber(quota.limits.creditsPerWindow)} credits
+                        <span style="float: right; color: #999;">Resets in ${quota.reset.timeUntilResetHuman}</span>
+                    </div>
+                    <div class="quota-progress-container">
+                        <div class="quota-progress-bar ${statusClass}" style="width: ${Math.min(percentage, 100)}%"></div>
+                    </div>
+                    <div style="text-align: center; margin-top: 8px; font-size: 12px; color: #666;">
+                        Using <strong>${percentage}%</strong> of quota
+                    </div>
+                    ${renderModelBreakdown(quota.modelBreakdown)}
+                </div>
+            `;
+        }
+
+        // Load quota for all keys
+        async function loadQuotas() {
+            const keyElements = document.querySelectorAll('[data-key-id]');
+            for (const el of keyElements) {
+                const keyId = el.dataset.keyId;
+                try {
+                    const quotaData = await fetchQuota(keyId);
+                    const quotaContainer = el.querySelector('.quota-container');
+                    if (quotaContainer && quotaData && quotaData.quota) {
+                        quotaContainer.innerHTML = renderQuotaSection(quotaData.quota);
+                    } else if (quotaContainer) {
+                        quotaContainer.innerHTML = '<div style="text-align: center; padding: 10px; color: #999; font-size: 12px;">Quota data unavailable</div>';
+                    }
+                } catch (error) {
+                    console.error(`Failed to load quota for key ${keyId}:`, error);
+                }
+            }
+
+            // Also load aggregate quota overview
+            await loadAggregateQuotaOverview();
+        }
+
+        // Load aggregate quota overview
+        async function loadAggregateQuotaOverview() {
+            try {
+                const response = await apiCall('/api/quota/overview');
+                if (!response.ok) return;
+
+                const data = await response.json();
+                const aggregateSection = document.getElementById('aggregate-usage-section');
+
+                if (!aggregateSection || !data.overview) return;
+
+                // Find keys approaching limits
+                const warnings = [];
+                if (data.overview.keysApproachingLimit && data.overview.keysApproachingLimit.length > 0) {
+                    data.overview.keysApproachingLimit.forEach(key => {
+                        warnings.push(`${key.prefix}: ${key.percentage}%`);
+                    });
+                }
+
+                // Add quota overview to aggregate section
+                const warningsHtml = warnings.length > 0 ? `
+                    <div class="aggregate-quota-overview">
+                        <div style="font-weight: 600; margin-bottom: 8px;">⚠️ Keys Approaching Limits</div>
+                        <div class="quota-warnings">
+                            ${warnings.map(w => `<span class="quota-warning-item">${w}</span>`).join('')}
+                        </div>
+                    </div>
+                ` : '';
+
+                // Update aggregate section with quota info
+                const existingContent = aggregateSection.querySelector('.aggregate-usage');
+                if (existingContent && data.overview.totalKeys > 0) {
+                    const quotaInfo = `
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
+                            <div style="font-size: 13px; opacity: 0.9;">
+                                Overall Quota Status: <strong>${data.overview.overallPercentage}%</strong> used across ${data.overview.totalKeys} key${data.overview.totalKeys > 1 ? 's' : ''}
+                            </div>
+                            ${warningsHtml}
+                        </div>
+                    `;
+
+                    // Append to existing aggregate usage
+                    existingContent.insertAdjacentHTML('beforeend', quotaInfo);
+                }
+            } catch (error) {
+                console.error('Failed to load aggregate quota overview:', error);
+            }
+        }
+
         async function checkOAuthStatus() {
             const response = await apiCall('/api/claude/status');
             const data = await response.json();
@@ -570,6 +842,8 @@
                 statusEl.className = 'status connected';
                 connectSection.classList.remove('active');
                 connectedSection.classList.add('active');
+                // Load user's current plan
+                await loadUserPlan();
             } else {
                 statusEl.textContent = 'Not Connected';
                 statusEl.className = 'status disconnected';
@@ -808,7 +1082,7 @@
                         }
 
                         return `
-                            <div class="key-item">
+                            <div class="key-item" data-key-id="${key.id}">
                                 <div class="key-header">
                                     <div class="key-info">
                                         <div class="key-prefix">${key.prefix} ${assignmentBadge}</div>
@@ -824,6 +1098,11 @@
                                     </div>
                                 </div>
                                 ${renderUsageStats(key.usage)}
+                                <div class="quota-container">
+                                    <div style="text-align: center; padding: 20px; color: #999;">
+                                        Loading quota...
+                                    </div>
+                                </div>
                             </div>
                         `;
                     }).join('');
@@ -835,7 +1114,7 @@
                 if (data.assigned && data.assigned.length > 0) {
                     assignedSection.style.display = 'block';
                     assignedListEl.innerHTML = data.assigned.map(key => `
-                        <div class="key-item">
+                        <div class="key-item" data-key-id="${key.id}">
                             <div class="key-header">
                                 <div class="key-info">
                                     <div class="key-prefix">${key.prefix}</div>
@@ -847,11 +1126,19 @@
                                 </div>
                             </div>
                             ${renderUsageStats(key.usage)}
+                            <div class="quota-container">
+                                <div style="text-align: center; padding: 20px; color: #999;">
+                                    Loading quota...
+                                </div>
+                            </div>
                         </div>
                     `).join('');
                 } else {
                     assignedSection.style.display = 'none';
                 }
+
+                // Load quota data for all keys after rendering
+                setTimeout(() => loadQuotas(), 100);
 
             } catch (error) {
                 console.error('Failed to load keys', error);
@@ -984,6 +1271,62 @@
             document.getElementById('message').style.display = 'none';
         }
 
+        async function loadUserPlan() {
+            try {
+                const response = await apiCall('/api/user/plan');
+                const data = await response.json();
+
+                if (response.ok && data.plan) {
+                    currentUserPlan = data.plan;
+
+                    // Update badge
+                    const badge = document.getElementById('current-plan-badge');
+                    badge.textContent = data.plan.toUpperCase();
+                    badge.className = 'plan-badge ' + data.plan;
+
+                    // Update selector
+                    document.getElementById('plan-selector').value = data.plan;
+                }
+            } catch (error) {
+                console.error('Failed to load user plan:', error);
+            }
+        }
+
+        async function updateUserPlan() {
+            const newPlan = document.getElementById('plan-selector').value;
+
+            if (newPlan === currentUserPlan) {
+                showMessage('Plan is already set to ' + newPlan, 'warning');
+                return;
+            }
+
+            try {
+                const response = await apiCall('/api/user/plan', {
+                    method: 'PATCH',
+                    body: JSON.stringify({ plan: newPlan })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage('Plan updated successfully to ' + newPlan + '. All your API keys will use this plan.', 'success');
+                    currentUserPlan = newPlan;
+
+                    // Update badge
+                    const badge = document.getElementById('current-plan-badge');
+                    badge.textContent = newPlan.toUpperCase();
+                    badge.className = 'plan-badge ' + newPlan;
+
+                    // Refresh quota displays for all keys
+                    setTimeout(() => loadQuotas(), 500);
+                } else {
+                    showMessage(data.error || 'Failed to update plan', 'error');
+                }
+            } catch (error) {
+                showMessage('Network error', 'error');
+            }
+        }
+
         function logout() {
             localStorage.removeItem('token');
             window.location.href = '/';
@@ -991,6 +1334,9 @@
 
         // Initialize
         checkOAuthStatus();
+
+        // Auto-refresh quota every 30 seconds
+        setInterval(loadQuotas, 30000);
     </script>
 </body>
 </html>
