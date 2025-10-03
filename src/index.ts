@@ -465,9 +465,25 @@ app.get("/api/quota/overview", authMiddleware, async (c) => {
     cost: keyQuotas.reduce((sum, k) => sum + k.cost, 0),
   };
 
+  // Calculate overall percentage (average across all keys)
+  const overallPercentage = keys.length > 0
+    ? Math.round(keyQuotas.reduce((sum, k) => sum + k.percentage, 0) / keys.length)
+    : 0;
+
+  // Find keys approaching limits (>= 80% usage)
+  const keysApproachingLimit = keyQuotas
+    .filter(k => k.percentage >= 80)
+    .map(k => ({
+      keyId: k.keyId,
+      prefix: k.keyPrefix,
+      percentage: k.percentage,
+    }));
+
   return c.json({
     overview: {
       totalKeys: keys.length,
+      overallPercentage,
+      keysApproachingLimit,
       aggregateUsage,
       keys: keyQuotas,
     },

@@ -818,8 +818,14 @@
                         </div>
                     `;
 
-                    // Append to existing aggregate usage
-                    existingContent.insertAdjacentHTML('beforeend', quotaInfo);
+                    // Remove existing quota info if present, then add new one
+                    const existingQuotaInfo = existingContent.querySelector('[data-quota-info]');
+                    if (existingQuotaInfo) {
+                        existingQuotaInfo.remove();
+                    }
+
+                    // Add data attribute for easy identification and replacement
+                    existingContent.insertAdjacentHTML('beforeend', quotaInfo.replace('<div style=', '<div data-quota-info style='));
                 }
             } catch (error) {
                 console.error('Failed to load aggregate quota overview:', error);
