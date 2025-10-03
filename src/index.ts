@@ -4,7 +4,7 @@ import { serveStatic } from "hono/bun";
 import { registerUser, loginUser, verifyToken } from "./auth";
 import { generateAuthUrl, exchangeCode, saveOAuthTokens, hasOAuthConnection, disconnectOAuth } from "./oauth";
 import { generateApiKey, listApiKeys, deleteApiKey, assignKey, acceptInvitation, getPendingInvitations, listAllUserKeys, getUserPlan, updateUserPlan } from "./keys";
-import { proxyToClaudeAPI } from "./proxy";
+import { proxyToClaudeAPI, proxyToClaudeAPIGeneric } from "./proxy";
 import { getKeyUsage, getAggregateUsage } from "./usage";
 import { getRollingWindowUsage, calculateUsagePercentage, formatDuration } from "./quota";
 import { PLAN_LIMITS } from "./limits";
@@ -560,6 +560,13 @@ app.get("/health", async (c) => {
       }
     }, 500);
   }
+});
+
+// Catch-all: proxy any /v1/* routes to Claude API
+app.all("/v1/*", async (c) => {
+  const path = new URL(c.req.url).pathname;
+  const method = c.req.method;
+  return proxyToClaudeAPIGeneric(c.req.raw, path, method);
 });
 
 const port = parseInt(process.env.PORT || "3000");
