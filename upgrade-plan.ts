@@ -29,7 +29,7 @@ async function upgradePlan() {
 
     console.log(`\n✅ Plan upgraded to: ${newPlan}`);
     console.log(`New limits:`);
-    console.log(`  - 10,000,000 credits per 5 hours`);
+    console.log(`  - 200,000,000 credits per 5 hours (20× Pro tier)`);
     console.log(`  - Rolling window (not fixed periods)`);
 
     await pool.end();

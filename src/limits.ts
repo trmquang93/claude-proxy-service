@@ -24,19 +24,19 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
     allowedModels: ["haiku", "sonnet"],
   },
   pro: {
-    creditsPerWindow: 500_000,     // ~500K Sonnet tokens per 5 hours
+    creditsPerWindow: 10_000_000,   // ~10M Sonnet tokens per 5 hours (base tier)
     windowHours: 5,                 // 5-hour rolling window
     maxRequestsPerMinute: 50,
     allowedModels: ["haiku", "sonnet", "opus"],
   },
   "max-5x": {
-    creditsPerWindow: 2_500_000,   // ~2.5M Sonnet tokens per 5 hours
+    creditsPerWindow: 50_000_000,   // ~50M Sonnet tokens per 5 hours (5× Pro)
     windowHours: 5,                 // 5-hour window
     maxRequestsPerMinute: 100,
     allowedModels: ["haiku", "sonnet", "opus"],
   },
   "max-20x": {
-    creditsPerWindow: 10_000_000,  // ~10M Sonnet tokens per 5 hours
+    creditsPerWindow: 200_000_000,  // ~200M Sonnet tokens per 5 hours (20× Pro)
     windowHours: 5,                 // 5-hour window
     maxRequestsPerMinute: 200,
     allowedModels: ["haiku", "sonnet", "opus"],

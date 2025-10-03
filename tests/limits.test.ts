@@ -115,7 +115,7 @@ describe("Limits Module", () => {
       expect(proPlan).toHaveProperty("maxRequestsPerMinute");
       expect(proPlan).toHaveProperty("allowedModels");
 
-      expect(proPlan.creditsPerWindow).toBe(500_000);
+      expect(proPlan.creditsPerWindow).toBe(10_000_000);
       expect(proPlan.windowHours).toBe(5);
       expect(proPlan.maxRequestsPerMinute).toBe(50);
       expect(Array.isArray(proPlan.allowedModels)).toBe(true);
@@ -128,7 +128,7 @@ describe("Limits Module", () => {
       expect(max5xPlan).toHaveProperty("maxRequestsPerMinute");
       expect(max5xPlan).toHaveProperty("allowedModels");
 
-      expect(max5xPlan.creditsPerWindow).toBe(2_500_000);
+      expect(max5xPlan.creditsPerWindow).toBe(50_000_000);
       expect(max5xPlan.windowHours).toBe(5);
       expect(max5xPlan.maxRequestsPerMinute).toBe(100);
       expect(Array.isArray(max5xPlan.allowedModels)).toBe(true);
@@ -141,7 +141,7 @@ describe("Limits Module", () => {
       expect(max20xPlan).toHaveProperty("maxRequestsPerMinute");
       expect(max20xPlan).toHaveProperty("allowedModels");
 
-      expect(max20xPlan.creditsPerWindow).toBe(10_000_000);
+      expect(max20xPlan.creditsPerWindow).toBe(200_000_000);
       expect(max20xPlan.windowHours).toBe(5);
       expect(max20xPlan.maxRequestsPerMinute).toBe(200);
       expect(Array.isArray(max20xPlan.allowedModels)).toBe(true);
