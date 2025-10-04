@@ -3,10 +3,10 @@ import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
 import { registerUser, loginUser, verifyToken } from "./auth";
 import { generateAuthUrl, exchangeCode, saveOAuthTokens, hasOAuthConnection, disconnectOAuth } from "./oauth";
-import { generateApiKey, listApiKeys, deleteApiKey, assignKey, acceptInvitation, getPendingInvitations, listAllUserKeys, getUserPlan, updateUserPlan } from "./keys";
+import { generateApiKey, listApiKeys, deleteApiKey, assignKey, acceptInvitation, getPendingInvitations, listAllUserKeys, getUserPlan, updateUserPlan, updateQuotaPercentage } from "./keys";
 import { proxyToClaudeAPI, proxyToClaudeAPIGeneric } from "./proxy";
 import { getKeyUsage, getAggregateUsage } from "./usage";
-import { getRollingWindowUsage, calculateUsagePercentage, formatDuration } from "./quota";
+import { getRollingWindowUsage, calculateUsagePercentage, formatDuration, calculateEffectiveLimit } from "./quota";
 import { PLAN_LIMITS } from "./limits";
 import pool, { initializeDatabase } from "./db";
 
@@ -165,7 +165,7 @@ app.delete("/api/claude/disconnect", authMiddleware, async (c) => {
 // API Key endpoints
 app.post("/api/keys/generate", authMiddleware, async (c) => {
   const user = c.get("user");
-  const { name } = await c.req.json().catch(() => ({}));
+  const { name, quotaPercentage } = await c.req.json().catch(() => ({}));
 
   // Check if user has connected Claude OAuth
   const hasConnection = await hasOAuthConnection(user.userId);
@@ -173,7 +173,7 @@ app.post("/api/keys/generate", authMiddleware, async (c) => {
     return c.json({ error: "Please connect your Claude account first" }, 400);
   }
 
-  const result = await generateApiKey(user.userId, name);
+  const result = await generateApiKey(user.userId, name, quotaPercentage);
   if (!result.success) {
     return c.json({ error: result.error }, 500);
   }
@@ -290,6 +290,24 @@ app.delete("/api/keys/:id", authMiddleware, async (c) => {
   return c.json({ message: "API key deleted successfully" });
 });
 
+// Update API key's quota percentage
+app.patch("/api/keys/:id/quota-percentage", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const keyId = c.req.param("id");
+  const { quotaPercentage } = await c.req.json();
+
+  if (quotaPercentage === undefined) {
+    return c.json({ error: "quotaPercentage is required" }, 400);
+  }
+
+  const result = await updateQuotaPercentage(keyId, user.userId, quotaPercentage);
+  if (!result.success) {
+    return c.json({ error: result.error }, 400);
+  }
+
+  return c.json({ message: "Quota percentage updated successfully" });
+});
+
 // Assign API key to user by email
 app.post("/api/keys/:id/assign", authMiddleware, async (c) => {
   const user = c.get("user");
@@ -357,15 +375,15 @@ app.get("/api/keys/:id/quota", authMiddleware, async (c) => {
   const user = c.get("user");
   const keyId = c.req.param("id");
 
-  // Verify user has access to this key (either owner or assigned user) and get owner's user_id
+  // Verify user has access to this key (either owner or assigned user) and get owner's user_id and quota_percentage
   const keyResult = await pool.query(
-    `SELECT user_id FROM api_keys
+    `SELECT user_id, quota_percentage FROM api_keys
      WHERE id = $1
      AND (user_id = $2 OR assigned_to_user_id = $3)
      AND is_active = true`,
     [keyId, user.userId, user.userId]
   );
-  const key = keyResult.rows[0];
+  const key = keyResult.rows[0] as { user_id: string; quota_percentage: number } | undefined;
 
   if (!key) {
     return c.json({ error: "Key not found or access denied" }, 404);
@@ -378,25 +396,38 @@ app.get("/api/keys/:id/quota", authMiddleware, async (c) => {
   );
   const planType = ownerResult.rows[0]?.plan_type || "pro";
   const planLimits = PLAN_LIMITS[planType];
+  const quotaPercentage = key.quota_percentage ?? 100;
+
+  // Calculate effective limits based on quota percentage
+  const effectiveCreditsLimit = calculateEffectiveLimit(planLimits.creditsPerWindow, quotaPercentage);
+
   const usage = await getRollingWindowUsage(keyId, planLimits.windowHours);
-  const percentages = calculateUsagePercentage(usage, planType);
+
+  // Calculate percentages based on effective limits
+  const creditPercentage = Math.round((usage.currentCredits / effectiveCreditsLimit) * 100);
+  const requestPercentage = creditPercentage; // Using credit percentage as request percentage
+  const maxPercentage = Math.max(creditPercentage, requestPercentage);
+  const isOverLimit = maxPercentage >= 100;
 
   return c.json({
     quota: {
       plan: planType,
+      quotaPercentage,
       usage: {
         credits: usage.currentCredits,
         requests: usage.currentRequests,
         cost: usage.currentCost,
       },
       percentages: {
-        credits: percentages.creditPercentage,
-        requests: percentages.requestPercentage,
-        overall: percentages.maxPercentage,
-        isOverLimit: percentages.isOverLimit,
+        credits: creditPercentage,
+        requests: requestPercentage,
+        overall: maxPercentage,
+        isOverLimit,
       },
       limits: {
-        creditsPerWindow: planLimits.creditsPerWindow,
+        planCreditsPerWindow: planLimits.creditsPerWindow,
+        effectiveCreditsPerWindow: effectiveCreditsLimit,
+        creditsPerWindow: effectiveCreditsLimit, // For backward compatibility
         windowHours: planLimits.windowHours,
         maxRequestsPerMinute: planLimits.maxRequestsPerMinute,
       },

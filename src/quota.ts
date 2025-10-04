@@ -1,10 +1,21 @@
 /**
  * Quota enforcement module with rolling window calculations
  * Implements credit-based rate limiting with plan-specific limits
+ * Supports per-key custom quota percentages
  */
 
 import pool from "./db";
 import { PLAN_LIMITS, PlanType, getModelWeight } from "./limits";
+
+/**
+ * Calculate effective limit based on plan limit and quota percentage
+ * @param planLimit - Base limit from user's plan
+ * @param quotaPercentage - Percentage of plan limit (1-100)
+ * @returns Effective limit (rounded down to integer)
+ */
+export function calculateEffectiveLimit(planLimit: number, quotaPercentage: number): number {
+  return Math.floor((planLimit * quotaPercentage) / 100);
+}
 
 export interface WindowUsageStats {
   currentCredits: number;
@@ -158,14 +169,42 @@ export function calculateUsagePercentage(usage: WindowUsageStats, planType: Plan
  */
 export async function checkQuotaLimit(keyId: string, planType: PlanType): Promise<QuotaCheckResult> {
   const limits = PLAN_LIMITS[planType];
+
+  // Get quota_percentage from api_keys table
+  const keyResult = await pool.query(
+    "SELECT quota_percentage FROM api_keys WHERE id = $1",
+    [keyId]
+  );
+  const quotaPercentage = keyResult.rows[0]?.quota_percentage ?? 100;
+
+  // Calculate effective limit based on quota percentage
+  const effectiveCreditsLimit = calculateEffectiveLimit(limits.creditsPerWindow, quotaPercentage);
+
   const usage = await getRollingWindowUsage(keyId, limits.windowHours);
-  const percentages = calculateUsagePercentage(usage, planType);
+
+  // Calculate percentages based on effective limit (not plan limit)
+  const creditPercentage = (usage.currentCredits / effectiveCreditsLimit) * 100;
+  const requestPercentage = creditPercentage; // Using credit percentage
+  const maxPercentage = Math.max(creditPercentage, requestPercentage);
+  const isOverLimit = maxPercentage >= 100;
+
+  const percentages = {
+    creditPercentage: Math.round(creditPercentage),
+    requestPercentage: Math.round(requestPercentage),
+    maxPercentage: Math.round(maxPercentage),
+    isOverLimit
+  };
+
   const resetTime = getNextResetTime(usage.oldestRequestTimestamp, limits.windowHours);
 
   if (percentages.isOverLimit) {
+    const limitDescription = quotaPercentage < 100
+      ? `${quotaPercentage}% of ${planType} plan limit`
+      : `${planType} plan limit`;
+
     return {
       allowed: false,
-      reason: `Quota exceeded: ${percentages.maxPercentage}% of ${planType} plan limit used. Resets ${formatDuration(usage.timeUntilResetMs)} from now.`,
+      reason: `Quota exceeded: ${percentages.maxPercentage}% of ${limitDescription} used. Resets ${formatDuration(usage.timeUntilResetMs)} from now.`,
       usage,
       percentages,
       resetTime

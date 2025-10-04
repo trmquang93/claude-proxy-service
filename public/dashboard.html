@@ -568,6 +568,17 @@
 
             <!-- Only for users with OAuth -->
             <div id="generate-key-container" style="display: none;">
+                <div style="margin-bottom: 20px;">
+                    <label for="quota-percentage-slider" style="display: block; margin-bottom: 10px; font-weight: 600;">
+                        Custom Quota Limit: <span id="quota-percentage-value">100</span>%
+                    </label>
+                    <input type="range" id="quota-percentage-slider" min="1" max="100" value="100"
+                           style="width: 100%; margin-bottom: 5px;"
+                           oninput="document.getElementById('quota-percentage-value').textContent = this.value; updateQuotaPreview(this.value)">
+                    <div id="quota-preview" style="font-size: 12px; color: #666; margin-bottom: 15px;">
+                        This key will have access to 100% of your plan's quota
+                    </div>
+                </div>
                 <button class="btn-primary" onclick="generateKey()">Generate New API Key</button>
 
                 <div id="new-key-display" style="display: none;" class="key-display">
@@ -733,22 +744,29 @@
             }
 
             const planBadgeClass = quota.plan || 'pro';
+            const quotaPercentage = quota.quotaPercentage || 100;
+            const hasCustomLimit = quotaPercentage < 100;
+
+            const effectiveLimit = quota.limits.effectiveCreditsPerWindow || quota.limits.creditsPerWindow;
+            const planLimit = quota.limits.planCreditsPerWindow || quota.limits.creditsPerWindow;
 
             return `
                 <div class="quota-section">
                     <div class="quota-header">
                         <span class="plan-badge ${planBadgeClass}">${quota.plan}</span>
+                        ${hasCustomLimit ? `<span class="plan-badge" style="background: #fff3e0; color: #e65100; font-size: 11px;">${quotaPercentage}% limit</span>` : ''}
                         ${alertBadge}
                     </div>
                     <div style="margin: 10px 0; font-size: 13px; color: #666;">
-                        <strong>${formatNumber(quota.usage.credits)}</strong> / ${formatNumber(quota.limits.creditsPerWindow)} credits
+                        <strong>${formatNumber(quota.usage.credits)}</strong> / ${formatNumber(effectiveLimit)} credits
+                        ${hasCustomLimit ? `<span style="font-size: 11px; color: #999;">(${quotaPercentage}% of ${formatNumber(planLimit)})</span>` : ''}
                         <span style="float: right; color: #999;">Resets in ${quota.reset.timeUntilResetHuman}</span>
                     </div>
                     <div class="quota-progress-container">
                         <div class="quota-progress-bar ${statusClass}" style="width: ${Math.min(percentage, 100)}%"></div>
                     </div>
                     <div style="text-align: center; margin-top: 8px; font-size: 12px; color: #666;">
-                        Using <strong>${percentage}%</strong> of quota
+                        Using <strong>${percentage}%</strong> of ${hasCustomLimit ? 'custom limit' : 'quota'}
                     </div>
                     ${renderModelBreakdown(quota.modelBreakdown)}
                 </div>
@@ -955,10 +973,12 @@
             hideMessage();
             document.getElementById('new-key-display').style.display = 'none';
 
+            const quotaPercentage = parseInt(document.getElementById('quota-percentage-slider').value);
+
             try {
                 const response = await apiCall('/api/keys/generate', {
                     method: 'POST',
-                    body: JSON.stringify({})
+                    body: JSON.stringify({ quotaPercentage })
                 });
 
                 const data = await response.json();
@@ -966,12 +986,26 @@
                 if (response.ok) {
                     document.getElementById('new-key-value').textContent = data.key;
                     document.getElementById('new-key-display').style.display = 'block';
+                    // Reset slider to 100%
+                    document.getElementById('quota-percentage-slider').value = 100;
+                    document.getElementById('quota-percentage-value').textContent = '100';
+                    updateQuotaPreview(100);
                     loadApiKeys(hasOAuthConnection);
+                    showMessage(`API key generated with ${quotaPercentage}% quota limit`, 'success');
                 } else {
                     showMessage(data.error || 'Failed to generate key', 'error');
                 }
             } catch (error) {
                 showMessage('Network error', 'error');
+            }
+        }
+
+        function updateQuotaPreview(percentage) {
+            const preview = document.getElementById('quota-preview');
+            if (percentage == 100) {
+                preview.textContent = "This key will have access to 100% of your plan's quota";
+            } else {
+                preview.textContent = `This key will have access to ${percentage}% of your plan's quota (limited access)`;
             }
         }
 
@@ -1099,6 +1133,7 @@
                                         ${assignmentInfo}
                                     </div>
                                     <div class="key-actions">
+                                        <button class="btn-secondary btn-small" onclick="openQuotaEditModal('${key.id}')">Edit Quota</button>
                                         ${key.assignment_status === 'unassigned' ? `<button class="btn-secondary btn-small" onclick="openAssignModal('${key.id}')">Assign</button>` : ''}
                                         <button class="btn-danger btn-small" onclick="deleteKey('${key.id}')">Delete</button>
                                     </div>
@@ -1336,6 +1371,56 @@
         function logout() {
             localStorage.removeItem('token');
             window.location.href = '/';
+        }
+
+        async function openQuotaEditModal(keyId) {
+            // Get current quota percentage from the displayed quota
+            const keyElement = document.querySelector(`[data-key-id="${keyId}"]`);
+            let currentQuota = 100;
+
+            try {
+                // Fetch current quota from API
+                const quotaData = await fetchQuota(keyId);
+                if (quotaData && quotaData.quota) {
+                    currentQuota = quotaData.quota.quotaPercentage || 100;
+                }
+            } catch (error) {
+                console.error('Failed to fetch current quota:', error);
+            }
+
+            const newQuota = prompt(`Enter new quota percentage (1-100):\n\nCurrent: ${currentQuota}%`, currentQuota);
+
+            if (newQuota === null) return; // User cancelled
+
+            const quotaPercentage = parseInt(newQuota);
+
+            if (isNaN(quotaPercentage) || quotaPercentage < 1 || quotaPercentage > 100) {
+                showMessage('Invalid quota percentage. Must be between 1 and 100.', 'error');
+                return;
+            }
+
+            await updateKeyQuota(keyId, quotaPercentage);
+        }
+
+        async function updateKeyQuota(keyId, quotaPercentage) {
+            try {
+                const response = await apiCall(`/api/keys/${keyId}/quota-percentage`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ quotaPercentage })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage(`Quota updated to ${quotaPercentage}%`, 'success');
+                    // Refresh quota display for this key
+                    setTimeout(() => loadQuotas(), 500);
+                } else {
+                    showMessage(data.error || 'Failed to update quota', 'error');
+                }
+            } catch (error) {
+                showMessage('Network error', 'error');
+            }
         }
 
         // Initialize

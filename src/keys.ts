@@ -19,18 +19,31 @@ export interface ApiKey {
 }
 
 // Generate a new API key
-export async function generateApiKey(userId: string, name?: string): Promise<{ success: boolean; key?: string; prefix?: string; error?: string }> {
+export async function generateApiKey(
+  userId: string,
+  name?: string,
+  quotaPercentage?: number
+): Promise<{ success: boolean; key?: string; prefix?: string; error?: string }> {
   try {
+    // Validate quota percentage if provided
+    if (quotaPercentage !== undefined) {
+      if (quotaPercentage < 1 || quotaPercentage > 100) {
+        return { success: false, error: "Quota percentage must be between 1 and 100" };
+      }
+    }
+
     const keyId = randomUUID();
     const randomPart = randomBytes(32).toString("hex");
     const key = `sk-proj-${randomPart}`;
     const keyHash = await bcrypt.hash(key, 10);
     const keyPrefix = `${key.substring(0, 15)}...`;
 
+    const finalQuotaPercentage = quotaPercentage ?? 100;
+
     await pool.query(
-      `INSERT INTO api_keys (id, user_id, key_hash, key_prefix, name)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [keyId, userId, keyHash, keyPrefix, name || null]
+      `INSERT INTO api_keys (id, user_id, key_hash, key_prefix, name, quota_percentage)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [keyId, userId, keyHash, keyPrefix, name || null, finalQuotaPercentage]
     );
 
     // Initialize usage tracking for the new key
@@ -307,5 +320,34 @@ export async function updateUserPlan(userId: string, planType: PlanType): Promis
   } catch (error) {
     console.error("[Keys] Update user plan error:", error);
     return { success: false, error: "Failed to update user plan" };
+  }
+}
+
+// Update API key's quota percentage
+export async function updateQuotaPercentage(
+  keyId: string,
+  userId: string,
+  quotaPercentage: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Validate quota percentage
+    if (quotaPercentage < 1 || quotaPercentage > 100) {
+      return { success: false, error: "Quota percentage must be between 1 and 100" };
+    }
+
+    // Verify user owns this key
+    const result = await pool.query(
+      "UPDATE api_keys SET quota_percentage = $1 WHERE id = $2 AND user_id = $3",
+      [quotaPercentage, keyId, userId]
+    );
+
+    if ((result.rowCount || 0) === 0) {
+      return { success: false, error: "Key not found or access denied" };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("[Keys] Update quota percentage error:", error);
+    return { success: false, error: "Failed to update quota percentage" };
   }
 }

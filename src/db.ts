@@ -64,6 +64,7 @@ export async function initializeDatabase(): Promise<void> {
         assignment_status VARCHAR(50) DEFAULT 'unassigned',
         invitation_token VARCHAR(255) UNIQUE,
         plan_type VARCHAR(50) DEFAULT 'pro',
+        quota_percentage INTEGER DEFAULT 100,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (assigned_to_user_id) REFERENCES users(id) ON DELETE SET NULL
       )
@@ -154,6 +155,19 @@ export async function initializeDatabase(): Promise<void> {
           WHERE table_name = 'users' AND column_name = 'plan_type'
         ) THEN
           ALTER TABLE users ADD COLUMN plan_type VARCHAR(50) DEFAULT 'pro';
+        END IF;
+      END $$;
+    `);
+
+    // Migration: Add quota_percentage column to existing api_keys table if not exists
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'api_keys' AND column_name = 'quota_percentage'
+        ) THEN
+          ALTER TABLE api_keys ADD COLUMN quota_percentage INTEGER DEFAULT 100;
         END IF;
       END $$;
     `);
