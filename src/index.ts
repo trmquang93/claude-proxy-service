@@ -405,9 +405,7 @@ app.get("/api/keys/:id/quota", authMiddleware, async (c) => {
 
   // Calculate percentages based on effective limits
   const creditPercentage = Math.round((usage.currentCredits / effectiveCreditsLimit) * 100);
-  const requestPercentage = creditPercentage; // Using credit percentage as request percentage
-  const maxPercentage = Math.max(creditPercentage, requestPercentage);
-  const isOverLimit = maxPercentage >= 100;
+  const isOverLimit = creditPercentage >= 100;
 
   return c.json({
     quota: {
@@ -420,8 +418,7 @@ app.get("/api/keys/:id/quota", authMiddleware, async (c) => {
       },
       percentages: {
         credits: creditPercentage,
-        requests: requestPercentage,
-        overall: maxPercentage,
+        overall: creditPercentage,
         isOverLimit,
       },
       limits: {
@@ -429,7 +426,6 @@ app.get("/api/keys/:id/quota", authMiddleware, async (c) => {
         effectiveCreditsPerWindow: effectiveCreditsLimit,
         creditsPerWindow: effectiveCreditsLimit, // For backward compatibility
         windowHours: planLimits.windowHours,
-        maxRequestsPerMinute: planLimits.maxRequestsPerMinute,
       },
       reset: {
         nextResetAt: new Date(usage.nextResetAt).toISOString(),
@@ -483,7 +479,7 @@ app.get("/api/quota/overview", authMiddleware, async (c) => {
         credits: usage.currentCredits,
         requests: usage.currentRequests,
         cost: usage.currentCost,
-        percentage: percentages.maxPercentage,
+        percentage: percentages.creditPercentage,
         isOverLimit: percentages.isOverLimit,
       };
     })

@@ -38,8 +38,6 @@ export interface ModelUsageBreakdown {
 
 export interface UsagePercentages {
   creditPercentage: number;
-  requestPercentage: number;
-  maxPercentage: number;
   isOverLimit: boolean;
 }
 
@@ -144,19 +142,10 @@ export function calculateUsagePercentage(usage: WindowUsageStats, planType: Plan
   const limits = PLAN_LIMITS[planType];
 
   const creditPercentage = (usage.currentCredits / limits.creditsPerWindow) * 100;
-
-  // Request percentage is based on total requests in window vs limit
-  // Note: maxRequestsPerMinute is per-minute, but we track total requests in window
-  // For simplicity, we'll use credit percentage as the primary limiter
-  const requestPercentage = creditPercentage;
-
-  const maxPercentage = Math.max(creditPercentage, requestPercentage);
-  const isOverLimit = maxPercentage >= 100;
+  const isOverLimit = creditPercentage >= 100;
 
   return {
     creditPercentage: Math.round(creditPercentage),
-    requestPercentage: Math.round(requestPercentage),
-    maxPercentage: Math.round(maxPercentage),
     isOverLimit
   };
 }
@@ -184,14 +173,10 @@ export async function checkQuotaLimit(keyId: string, planType: PlanType): Promis
 
   // Calculate percentages based on effective limit (not plan limit)
   const creditPercentage = (usage.currentCredits / effectiveCreditsLimit) * 100;
-  const requestPercentage = creditPercentage; // Using credit percentage
-  const maxPercentage = Math.max(creditPercentage, requestPercentage);
-  const isOverLimit = maxPercentage >= 100;
+  const isOverLimit = creditPercentage >= 100;
 
   const percentages = {
     creditPercentage: Math.round(creditPercentage),
-    requestPercentage: Math.round(requestPercentage),
-    maxPercentage: Math.round(maxPercentage),
     isOverLimit
   };
 
@@ -204,7 +189,7 @@ export async function checkQuotaLimit(keyId: string, planType: PlanType): Promis
 
     return {
       allowed: false,
-      reason: `Quota exceeded: ${percentages.maxPercentage}% of ${limitDescription} used. Resets ${formatDuration(usage.timeUntilResetMs)} from now.`,
+      reason: `Quota exceeded: ${percentages.creditPercentage}% of ${limitDescription} used. Resets ${formatDuration(usage.timeUntilResetMs)} from now.`,
       usage,
       percentages,
       resetTime

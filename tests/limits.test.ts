@@ -99,12 +99,10 @@ describe("Limits Module", () => {
       const freePlan = PLAN_LIMITS.free;
       expect(freePlan).toHaveProperty("creditsPerWindow");
       expect(freePlan).toHaveProperty("windowHours");
-      expect(freePlan).toHaveProperty("maxRequestsPerMinute");
       expect(freePlan).toHaveProperty("allowedModels");
 
       expect(freePlan.creditsPerWindow).toBe(10_000);
       expect(freePlan.windowHours).toBe(24);
-      expect(freePlan.maxRequestsPerMinute).toBe(5);
       expect(Array.isArray(freePlan.allowedModels)).toBe(true);
     });
 
@@ -112,12 +110,10 @@ describe("Limits Module", () => {
       const proPlan = PLAN_LIMITS.pro;
       expect(proPlan).toHaveProperty("creditsPerWindow");
       expect(proPlan).toHaveProperty("windowHours");
-      expect(proPlan).toHaveProperty("maxRequestsPerMinute");
       expect(proPlan).toHaveProperty("allowedModels");
 
       expect(proPlan.creditsPerWindow).toBe(10_000_000);
       expect(proPlan.windowHours).toBe(5);
-      expect(proPlan.maxRequestsPerMinute).toBe(50);
       expect(Array.isArray(proPlan.allowedModels)).toBe(true);
     });
 
@@ -125,12 +121,10 @@ describe("Limits Module", () => {
       const max5xPlan = PLAN_LIMITS["max-5x"];
       expect(max5xPlan).toHaveProperty("creditsPerWindow");
       expect(max5xPlan).toHaveProperty("windowHours");
-      expect(max5xPlan).toHaveProperty("maxRequestsPerMinute");
       expect(max5xPlan).toHaveProperty("allowedModels");
 
       expect(max5xPlan.creditsPerWindow).toBe(50_000_000);
       expect(max5xPlan.windowHours).toBe(5);
-      expect(max5xPlan.maxRequestsPerMinute).toBe(100);
       expect(Array.isArray(max5xPlan.allowedModels)).toBe(true);
     });
 
@@ -138,12 +132,10 @@ describe("Limits Module", () => {
       const max20xPlan = PLAN_LIMITS["max-20x"];
       expect(max20xPlan).toHaveProperty("creditsPerWindow");
       expect(max20xPlan).toHaveProperty("windowHours");
-      expect(max20xPlan).toHaveProperty("maxRequestsPerMinute");
       expect(max20xPlan).toHaveProperty("allowedModels");
 
       expect(max20xPlan.creditsPerWindow).toBe(200_000_000);
       expect(max20xPlan.windowHours).toBe(5);
-      expect(max20xPlan.maxRequestsPerMinute).toBe(200);
       expect(Array.isArray(max20xPlan.allowedModels)).toBe(true);
     });
 

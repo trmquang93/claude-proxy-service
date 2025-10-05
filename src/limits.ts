@@ -8,7 +8,6 @@ export type PlanType = "free" | "pro" | "max-5x" | "max-20x";
 export interface PlanLimits {
   creditsPerWindow: number;      // Total credits allowed in the time window
   windowHours: number;            // Time window in hours
-  maxRequestsPerMinute: number;   // Rate limit per minute
   allowedModels: string[];        // List of allowed model types
 }
 
@@ -20,25 +19,21 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
   free: {
     creditsPerWindow: 10_000,      // ~10K Sonnet tokens or 2.5K Haiku tokens per day
     windowHours: 24,                // Daily limit
-    maxRequestsPerMinute: 5,
     allowedModels: ["haiku", "sonnet"],
   },
   pro: {
     creditsPerWindow: 10_000_000,   // ~10M Sonnet tokens per 5 hours (base tier)
     windowHours: 5,                 // 5-hour rolling window
-    maxRequestsPerMinute: 50,
     allowedModels: ["haiku", "sonnet", "opus"],
   },
   "max-5x": {
     creditsPerWindow: 50_000_000,   // ~50M Sonnet tokens per 5 hours (5× Pro)
     windowHours: 5,                 // 5-hour window
-    maxRequestsPerMinute: 100,
     allowedModels: ["haiku", "sonnet", "opus"],
   },
   "max-20x": {
     creditsPerWindow: 200_000_000,  // ~200M Sonnet tokens per 5 hours (20× Pro)
     windowHours: 5,                 // 5-hour window
-    maxRequestsPerMinute: 200,
     allowedModels: ["haiku", "sonnet", "opus"],
   },
 };

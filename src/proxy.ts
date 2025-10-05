@@ -63,7 +63,7 @@ export async function proxyToClaudeAPI(request: Request): Promise<Response> {
             type: "rate_limit_error",
             message: quotaCheck.reason,
             quota_exceeded: {
-              usage_percentage: quotaCheck.percentages.maxPercentage,
+              usage_percentage: quotaCheck.percentages.creditPercentage,
               reset_at: quotaCheck.resetTime.toISOString(),
               time_until_reset: formatDuration(quotaCheck.usage.timeUntilResetMs)
             }
@@ -175,7 +175,7 @@ export async function proxyToClaudeAPI(request: Request): Promise<Response> {
         "X-RateLimit-Limit": PLAN_LIMITS[planType].creditsPerWindow.toString(),
         "X-RateLimit-Remaining": Math.max(0, creditsRemaining).toString(),
         "X-RateLimit-Reset": quotaCheck.resetTime.toISOString(),
-        "X-Quota-Percentage": quotaCheck.percentages.maxPercentage.toFixed(2)
+        "X-Quota-Percentage": quotaCheck.percentages.creditPercentage.toFixed(2)
       },
     });
   } catch (error) {
@@ -246,7 +246,7 @@ export async function proxyToClaudeAPIGeneric(request: Request, path: string, me
               type: "rate_limit_error",
               message: quotaCheck.reason,
               quota_exceeded: {
-                usage_percentage: quotaCheck.percentages.maxPercentage,
+                usage_percentage: quotaCheck.percentages.creditPercentage,
                 reset_at: quotaCheck.resetTime.toISOString(),
                 time_until_reset: formatDuration(quotaCheck.usage.timeUntilResetMs)
               }
@@ -358,7 +358,7 @@ export async function proxyToClaudeAPIGeneric(request: Request, path: string, me
         headers["X-RateLimit-Limit"] = PLAN_LIMITS[planType].creditsPerWindow.toString();
         headers["X-RateLimit-Remaining"] = Math.max(0, creditsRemaining).toString();
         headers["X-RateLimit-Reset"] = quotaCheck.resetTime.toISOString();
-        headers["X-Quota-Percentage"] = quotaCheck.percentages.maxPercentage.toFixed(2);
+        headers["X-Quota-Percentage"] = quotaCheck.percentages.creditPercentage.toFixed(2);
       }
 
       return new Response(claudeResponse.body, {
@@ -396,7 +396,7 @@ export async function proxyToClaudeAPIGeneric(request: Request, path: string, me
       responseHeaders["X-RateLimit-Limit"] = PLAN_LIMITS[planType].creditsPerWindow.toString();
       responseHeaders["X-RateLimit-Remaining"] = Math.max(0, creditsRemaining).toString();
       responseHeaders["X-RateLimit-Reset"] = quotaCheck.resetTime.toISOString();
-      responseHeaders["X-Quota-Percentage"] = quotaCheck.percentages.maxPercentage.toFixed(2);
+      responseHeaders["X-Quota-Percentage"] = quotaCheck.percentages.creditPercentage.toFixed(2);
     }
 
     return new Response(JSON.stringify(responseData), {

@@ -240,7 +240,7 @@ describe("Quota Module - Rolling Window Calculations", () => {
   describe("calculateUsagePercentage()", () => {
     test("should calculate credit percentage correctly", () => {
       const usage: WindowUsageStats = {
-        currentCredits: 250000,
+        currentCredits: 5000000, // 50% of pro plan limit
         currentRequests: 10,
         currentCost: 0,
         oldestRequestTimestamp: Date.now(),
@@ -253,10 +253,10 @@ describe("Quota Module - Rolling Window Calculations", () => {
 
       const percentages = calculateUsagePercentage(usage, "pro");
 
-      expect(percentages.creditPercentage).toBe(50); // 250000 / 500000 * 100
+      expect(percentages.creditPercentage).toBe(50); // 5000000 / 10000000 * 100
     });
 
-    test("should calculate request percentage correctly", () => {
+    test("should only calculate credit percentage (no request limits)", () => {
       const usage: WindowUsageStats = {
         currentCredits: 100000,
         currentRequests: 25,
@@ -271,14 +271,14 @@ describe("Quota Module - Rolling Window Calculations", () => {
 
       const percentages = calculateUsagePercentage(usage, "pro");
 
-      // Note: maxRequestsPerMinute is per-minute, not per-window
-      // This test validates the calculation logic, actual enforcement may differ
-      expect(percentages.requestPercentage).toBeGreaterThanOrEqual(0);
+      // Only credit percentage is calculated (no request limits)
+      expect(percentages.creditPercentage).toBe(1); // 100000 / 10000000 * 100 = 1%
+      expect(percentages.isOverLimit).toBe(false);
     });
 
-    test("should identify most restrictive limit (maxPercentage)", () => {
+    test("should use credit percentage as the only limit", () => {
       const usage: WindowUsageStats = {
-        currentCredits: 450000, // 90% of pro limit
+        currentCredits: 9000000, // 90% of pro limit
         currentRequests: 10,
         currentCost: 0,
         oldestRequestTimestamp: Date.now(),
@@ -291,12 +291,13 @@ describe("Quota Module - Rolling Window Calculations", () => {
 
       const percentages = calculateUsagePercentage(usage, "pro");
 
-      expect(percentages.maxPercentage).toBe(90); // Credits are more restrictive
+      expect(percentages.creditPercentage).toBe(90); // 9000000 / 10000000 * 100
+      expect(percentages.isOverLimit).toBe(false);
     });
 
     test("should set isOverLimit=true when >=100%", () => {
       const usage: WindowUsageStats = {
-        currentCredits: 500000, // Exactly at limit
+        currentCredits: 10000000, // Exactly at limit
         currentRequests: 10,
         currentCost: 0,
         oldestRequestTimestamp: Date.now(),
@@ -315,7 +316,7 @@ describe("Quota Module - Rolling Window Calculations", () => {
 
     test("should set isOverLimit=false when <100%", () => {
       const usage: WindowUsageStats = {
-        currentCredits: 499999, // Just under limit
+        currentCredits: 9999999, // Just under limit
         currentRequests: 10,
         currentCost: 0,
         oldestRequestTimestamp: Date.now(),
