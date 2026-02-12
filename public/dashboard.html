@@ -487,6 +487,89 @@
             font-size: 12px;
             font-weight: 500;
         }
+        .os-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .os-tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s;
+            margin-bottom: -2px;
+        }
+        .os-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        .os-tab:hover:not(.active) {
+            color: #333;
+            background: #f5f5f5;
+        }
+        .setup-section {
+            display: none;
+        }
+        .setup-section.active {
+            display: block;
+        }
+        .setup-section h4 {
+            color: #333;
+            margin: 15px 0 10px 0;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .code-block {
+            position: relative;
+            background: #1e1e1e;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .code-block pre {
+            color: #d4d4d4;
+            font-family: 'Courier New', Consolas, Monaco, monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            margin: 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .btn-copy {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-copy:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+        }
+        .btn-copy:active {
+            transform: translateY(0);
+        }
+        .btn-setup {
+            background: #4caf50;
+            color: white;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        .btn-setup:hover {
+            background: #45a049;
+        }
     </style>
 </head>
 <body>
@@ -584,7 +667,10 @@
                 <div id="new-key-display" style="display: none;" class="key-display">
                     <strong style="color: #c62828;">⚠️ Save this key now - it will only be shown once!</strong>
                     <div class="key-value" id="new-key-value"></div>
-                    <button class="btn-secondary" onclick="copyKey()">Copy to Clipboard</button>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button class="btn-secondary" onclick="copyKey()">Copy to Clipboard</button>
+                        <button class="btn-setup btn-small" onclick="openSetupModal(document.getElementById('new-key-value').textContent)">Quick Setup</button>
+                    </div>
                 </div>
             </div>
 
@@ -641,6 +727,82 @@
         </div>
     </div>
 
+    <!-- Setup Modal -->
+    <div id="setup-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h3>Quick Setup - Configure Claude Code</h3>
+            <p style="color: #666; margin-bottom: 20px;">
+                Copy and paste these commands to configure your local environment for Claude Code:
+            </p>
+
+            <!-- OS Tabs -->
+            <div class="os-tabs">
+                <button class="os-tab active" data-os="unix" onclick="switchOSTab('unix')">
+                    Mac / Linux
+                </button>
+                <button class="os-tab" data-os="windows" onclick="switchOSTab('windows')">
+                    Windows PowerShell
+                </button>
+            </div>
+
+            <!-- Unix/Mac Instructions -->
+            <div id="setup-unix" class="setup-section active">
+                <h4>Temporary Setup (Current Session Only)</h4>
+                <div class="code-block">
+                    <pre id="unix-temp-command"></pre>
+                    <button class="btn-copy" onclick="copySetupCommand('unix-temp')">Copy</button>
+                </div>
+
+                <h4 style="margin-top: 20px;">Permanent Setup (Recommended)</h4>
+                <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+                    Add to your ~/.zshrc or ~/.bashrc file:
+                </p>
+                <div class="code-block">
+                    <pre id="unix-permanent-command"></pre>
+                    <button class="btn-copy" onclick="copySetupCommand('unix-permanent')">Copy</button>
+                </div>
+                <p style="font-size: 12px; color: #999; margin-top: 8px;">
+                    After adding, run: <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">source ~/.zshrc</code>
+                </p>
+            </div>
+
+            <!-- Windows Instructions -->
+            <div id="setup-windows" class="setup-section">
+                <h4>Temporary Setup (Current Session Only)</h4>
+                <div class="code-block">
+                    <pre id="windows-temp-command"></pre>
+                    <button class="btn-copy" onclick="copySetupCommand('windows-temp')">Copy</button>
+                </div>
+
+                <h4 style="margin-top: 20px;">Permanent Setup (PowerShell Profile)</h4>
+                <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+                    Run this command to add to your PowerShell profile:
+                </p>
+                <div class="code-block">
+                    <pre id="windows-permanent-command"></pre>
+                    <button class="btn-copy" onclick="copySetupCommand('windows-permanent')">Copy</button>
+                </div>
+                <p style="font-size: 12px; color: #999; margin-top: 8px;">
+                    Then restart PowerShell for changes to take effect.
+                </p>
+            </div>
+
+            <!-- Usage Instructions -->
+            <div style="background: #f0f4ff; padding: 15px; border-radius: 6px; margin-top: 20px; border-left: 4px solid #667eea;">
+                <strong>Next Steps:</strong>
+                <ol style="margin: 10px 0 0 20px; font-size: 13px; line-height: 1.8;">
+                    <li>Copy and run the commands above in your terminal</li>
+                    <li>Verify setup: <code style="background: rgba(255,255,255,0.8); padding: 2px 6px; border-radius: 3px;">echo $ANTHROPIC_AUTH_TOKEN</code></li>
+                    <li>Start using Claude Code with your proxy configuration</li>
+                </ol>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="btn-secondary" onclick="closeSetupModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '';
         let authToken = localStorage.getItem('token');
@@ -650,25 +812,49 @@
         let currentUserPlan = 'pro';
 
         if (!authToken) {
+            console.log('No auth token found, redirecting to login...');
             window.location.href = '/';
         }
 
         async function apiCall(endpoint, options = {}) {
-            const response = await fetch(API_BASE + endpoint, {
-                ...options,
-                headers: {
-                    'Authorization': `Bearer ${authToken}`,
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                }
-            });
+            console.log(`[apiCall] Starting request to ${endpoint}`, { authToken: authToken ? 'present' : 'missing' });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-            if (response.status === 401) {
-                logout();
+            try {
+                console.log(`[apiCall] Fetching ${API_BASE + endpoint}`);
+                const response = await fetch(API_BASE + endpoint, {
+                    ...options,
+                    signal: controller.signal,
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    }
+                });
+
+                clearTimeout(timeoutId);
+                console.log(`[apiCall] Response received:`, { status: response.status, ok: response.ok, endpoint });
+
+                if (response.status === 401) {
+                    console.log('[apiCall] Unauthorized (401), redirecting to login...');
+                    logout();
+                    return null;
+                }
+
+                console.log(`[apiCall] Returning response for ${endpoint}`);
+                return response;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    console.error('[apiCall] Timeout error:', endpoint);
+                    showMessage('Request timed out. Please try again.', 'error');
+                } else {
+                    console.error('[apiCall] Network/fetch error:', error);
+                    showMessage('Network error. Please check your connection.', 'error');
+                }
                 return null;
             }
-
-            return response;
         }
 
         function formatTokens(tokens) {
@@ -851,35 +1037,80 @@
         }
 
         async function checkOAuthStatus() {
-            const response = await apiCall('/api/claude/status');
-            const data = await response.json();
+            console.log('[Dashboard] Checking OAuth status...');
 
-            const statusEl = document.getElementById('oauth-status');
-            const connectSection = document.getElementById('connect-section');
-            const connectedSection = document.getElementById('connected-section');
+            try {
+                console.log('[Dashboard] Calling apiCall for /api/claude/status...');
+                const response = await apiCall('/api/claude/status');
+                console.log('[Dashboard] apiCall returned:', response);
 
-            // Store OAuth connection status globally
-            hasOAuthConnection = data.connected;
+                // Handle case where apiCall returns null (auth failed, redirecting to login)
+                if (!response) {
+                    console.log('[Dashboard] No response from API, likely redirecting...');
+                    // Update status to Error since apiCall handles 401 separately
+                    const statusEl = document.getElementById('oauth-status');
+                    console.log('[Dashboard] Updating status element to Error:', statusEl);
+                    if (statusEl) {
+                        statusEl.textContent = 'Error';
+                        statusEl.className = 'status disconnected';
+                    }
+                    return;
+                }
 
-            if (data.connected) {
-                statusEl.textContent = 'Connected';
-                statusEl.className = 'status connected';
-                connectSection.classList.remove('active');
-                connectedSection.classList.add('active');
-                // Load user's current plan
-                await loadUserPlan();
-            } else {
-                statusEl.textContent = 'Not Connected';
-                statusEl.className = 'status disconnected';
-                connectSection.classList.add('active');
-                connectedSection.classList.remove('active');
+                // Check if response is OK before parsing JSON
+                if (!response.ok) {
+                    console.error('[Dashboard] Status endpoint returned', response.status, response.statusText);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                console.log('[Dashboard] Parsing JSON response...');
+                const data = await response.json();
+                console.log('[Dashboard] OAuth status data:', data);
+
+                const statusEl = document.getElementById('oauth-status');
+                const connectSection = document.getElementById('connect-section');
+                const connectedSection = document.getElementById('connected-section');
+                console.log('[Dashboard] DOM elements:', { statusEl: !!statusEl, connectSection: !!connectSection, connectedSection: !!connectedSection });
+
+                // Store OAuth connection status globally
+                hasOAuthConnection = data.connected;
+                console.log('[Dashboard] Setting hasOAuthConnection to:', hasOAuthConnection);
+
+                if (data.connected) {
+                    console.log('[Dashboard] Updating status to: Connected');
+                    if (statusEl) {
+                        statusEl.textContent = 'Connected';
+                        statusEl.className = 'status connected';
+                    }
+                    connectSection?.classList.remove('active');
+                    connectedSection?.classList.add('active');
+                    // Load user's current plan
+                    await loadUserPlan();
+                } else {
+                    console.log('[Dashboard] Updating status to: Not Connected');
+                    if (statusEl) {
+                        statusEl.textContent = 'Not Connected';
+                        statusEl.className = 'status disconnected';
+                    }
+                    connectSection?.classList.add('active');
+                    connectedSection?.classList.remove('active');
+                }
+
+                // Always load API keys (will handle visibility based on OAuth + assigned keys)
+                await loadApiKeys(hasOAuthConnection);
+
+                // Always check for pending invitations regardless of OAuth status
+                loadPendingInvitations();
+            } catch (error) {
+                console.error('[Dashboard] Failed to check OAuth status:', error);
+                const statusEl = document.getElementById('oauth-status');
+                console.log('[Dashboard] Catch block - statusEl:', statusEl);
+                if (statusEl) {
+                    statusEl.textContent = 'Error';
+                    statusEl.className = 'status disconnected';
+                }
+                showMessage('Failed to load OAuth status. Please refresh the page.', 'error');
             }
-
-            // Always load API keys (will handle visibility based on OAuth + assigned keys)
-            await loadApiKeys(hasOAuthConnection);
-
-            // Always check for pending invitations regardless of OAuth status
-            loadPendingInvitations();
         }
 
         async function connectClaude() {
@@ -1133,6 +1364,7 @@
                                         ${assignmentInfo}
                                     </div>
                                     <div class="key-actions">
+                                        <button class="btn-setup btn-small" onclick="openSetupModal('${key.prefix}...[FULL_KEY_HERE]')">Setup</button>
                                         <button class="btn-secondary btn-small" onclick="openQuotaEditModal('${key.id}')">Edit Quota</button>
                                         ${key.assignment_status === 'unassigned' ? `<button class="btn-secondary btn-small" onclick="openAssignModal('${key.id}')">Assign</button>` : ''}
                                         <button class="btn-danger btn-small" onclick="deleteKey('${key.id}')">Delete</button>
@@ -1164,6 +1396,9 @@
                                         ${key.is_active ? '<span style="color: #2e7d32;">● Active</span>' : '<span style="color: #999;">● Inactive</span>'}
                                     </div>
                                     <div class="key-assignment">👤 Provider: ${key.owner_email}</div>
+                                </div>
+                                <div class="key-actions">
+                                    <button class="btn-setup btn-small" onclick="openSetupModal('${key.prefix}...[FULL_KEY_HERE]')">Setup</button>
                                 </div>
                             </div>
                             ${renderUsageStats(key.usage)}
@@ -1224,6 +1459,113 @@
         function closeAssignModal() {
             assigningKeyId = null;
             document.getElementById('assign-modal').classList.remove('active');
+        }
+
+        function openSetupModal(keyValue) {
+            // Auto-detect server URL
+            const serverUrl = window.location.origin;
+            const baseUrl = serverUrl + '/api/anthropic';
+
+            // Check if this is a placeholder (existing key)
+            const isPlaceholder = keyValue.includes('[FULL_KEY_HERE]');
+
+            // Show warning if placeholder
+            const modalContent = document.querySelector('#setup-modal .modal-content');
+            const existingWarning = modalContent.querySelector('.key-warning');
+            if (existingWarning) {
+                existingWarning.remove();
+            }
+
+            if (isPlaceholder) {
+                const warning = document.createElement('div');
+                warning.className = 'key-warning message warning';
+                warning.style.display = 'block';
+                warning.innerHTML = '⚠️ <strong>Note:</strong> For security, full API keys are only shown once at generation. Replace <code>[FULL_KEY_HERE]</code> with your actual API key in the commands below.';
+                modalContent.insertBefore(warning, modalContent.children[1]);
+            }
+
+            // Generate commands for Unix/Mac
+            const unixTempCmd = `export ANTHROPIC_BASE_URL="${baseUrl}"\nexport ANTHROPIC_AUTH_TOKEN="${keyValue}"`;
+            const unixPermanentCmd = `echo 'export ANTHROPIC_BASE_URL="${baseUrl}"' >> ~/.zshrc\necho 'export ANTHROPIC_AUTH_TOKEN="${keyValue}"' >> ~/.zshrc`;
+
+            // Generate commands for Windows
+            const windowsTempCmd = '$Env:ANTHROPIC_BASE_URL="' + baseUrl + '"\n$Env:ANTHROPIC_AUTH_TOKEN="' + keyValue + '"';
+            const windowsPermanentCmd = 'Add-Content -Path $PROFILE -Value "\\n$Env:ANTHROPIC_BASE_URL=\'' + baseUrl + '\'"\nAdd-Content -Path $PROFILE -Value "$Env:ANTHROPIC_AUTH_TOKEN=\'' + keyValue + '\'"';
+
+            // Populate command blocks
+            document.getElementById('unix-temp-command').textContent = unixTempCmd;
+            document.getElementById('unix-permanent-command').textContent = unixPermanentCmd;
+            document.getElementById('windows-temp-command').textContent = windowsTempCmd;
+            document.getElementById('windows-permanent-command').textContent = windowsPermanentCmd;
+
+            // Show modal
+            document.getElementById('setup-modal').classList.add('active');
+
+            // Reset to Unix tab by default
+            switchOSTab('unix');
+        }
+
+        function closeSetupModal() {
+            document.getElementById('setup-modal').classList.remove('active');
+        }
+
+        function switchOSTab(os) {
+            // Update tab buttons
+            document.querySelectorAll('.os-tab').forEach(tab => {
+                if (tab.dataset.os === os) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+
+            // Update sections
+            document.querySelectorAll('.setup-section').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            if (os === 'unix') {
+                document.getElementById('setup-unix').classList.add('active');
+            } else {
+                document.getElementById('setup-windows').classList.add('active');
+            }
+        }
+
+        async function copySetupCommand(commandId) {
+            const commandElement = document.getElementById(commandId + '-command');
+            const commandText = commandElement.textContent;
+
+            try {
+                await navigator.clipboard.writeText(commandText);
+
+                // Find the copy button and show feedback
+                const button = commandElement.parentElement.querySelector('.btn-copy');
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = '#4caf50';
+
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = '#667eea';
+                }, 2000);
+            } catch (error) {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = commandText;
+                textArea.style.position = 'fixed';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.select();
+
+                try {
+                    document.execCommand('copy');
+                    showMessage('Command copied to clipboard!', 'success');
+                } catch (err) {
+                    showMessage('Failed to copy. Please copy manually.', 'error');
+                }
+
+                document.body.removeChild(textArea);
+            }
         }
 
         async function submitAssignment() {
@@ -1423,8 +1765,27 @@
             }
         }
 
-        // Initialize
-        checkOAuthStatus();
+        // Initialize with timeout protection
+        console.log('[Dashboard] Initializing dashboard...');
+        const loadingTimeout = setTimeout(() => {
+            console.error('[Dashboard] Loading timeout - forcing error state');
+            const statusEl = document.getElementById('oauth-status');
+            console.log('[Dashboard] Timeout check - statusEl:', statusEl, 'current text:', statusEl?.textContent);
+            if (statusEl && statusEl.textContent === 'Checking...') {
+                statusEl.textContent = 'Timeout';
+                statusEl.className = 'status disconnected';
+                showMessage('Loading timed out. Please refresh the page or check browser console for errors.', 'error');
+            }
+        }, 10000); // 10 second timeout
+
+        console.log('[Dashboard] Calling checkOAuthStatus...');
+        checkOAuthStatus().then(() => {
+            console.log('[Dashboard] checkOAuthStatus completed');
+            clearTimeout(loadingTimeout);
+        }).catch((error) => {
+            clearTimeout(loadingTimeout);
+            console.error('[Dashboard] Fatal error during initialization:', error);
+        });
 
         // Auto-refresh quota every 30 seconds
         setInterval(loadQuotas, 30000);
