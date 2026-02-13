@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
-import { registerUser, loginUser, verifyToken } from "./auth";
+import { registerUser, loginUser, verifyToken, getUserById } from "./auth";
 import { generateAuthUrl, exchangeCode, saveOAuthTokens, hasOAuthConnection, disconnectOAuth } from "./oauth";
 import { generateApiKey, listApiKeys, deleteApiKey, assignKey, acceptInvitation, getPendingInvitations, listAllUserKeys, getUserPlan, updateUserPlan, updateQuotaPercentage } from "./keys";
 import { proxyToClaudeAPI, proxyToClaudeAPIGeneric } from "./proxy";
@@ -37,6 +37,11 @@ const authMiddleware = async (c: any, next: any) => {
 
   if (!payload) {
     return c.json({ error: "Invalid token" }, 401);
+  }
+
+  const user = await getUserById(payload.userId);
+  if (!user) {
+    return c.json({ error: "User not found" }, 401);
   }
 
   c.set("user", payload);
@@ -141,10 +146,14 @@ app.post("/api/claude/callback", authMiddleware, async (c) => {
 });
 
 app.get("/api/claude/status", authMiddleware, async (c) => {
-  const user = c.get("user");
-  const connected = await hasOAuthConnection(user.userId);
-
-  return c.json({ connected });
+  try {
+    const user = c.get("user");
+    const connected = await hasOAuthConnection(user.userId);
+    return c.json({ connected });
+  } catch (error) {
+    console.error("[API] Error checking OAuth status:", error);
+    return c.json({ error: "Failed to check OAuth status" }, 500);
+  }
 });
 
 app.delete("/api/claude/disconnect", authMiddleware, async (c) => {

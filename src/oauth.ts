@@ -2,6 +2,7 @@ import { generatePKCE } from "@openauthjs/openauth/pkce";
 import pool from "./db";
 
 const CLIENT_ID = process.env.CLAUDE_CLIENT_ID || "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+const REDIRECT_URI = "https://platform.claude.com/oauth/code/callback";
 
 export interface OAuthToken {
   user_id: string;
@@ -19,7 +20,7 @@ export async function generateAuthUrl(): Promise<{ url: string; verifier: string
   url.searchParams.set("code", "true");
   url.searchParams.set("client_id", CLIENT_ID);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("redirect_uri", "https://console.anthropic.com/oauth/code/callback");
+  url.searchParams.set("redirect_uri", REDIRECT_URI);
   url.searchParams.set("scope", "org:create_api_key user:profile user:inference");
   url.searchParams.set("code_challenge", pkce.challenge);
   url.searchParams.set("code_challenge_method", "S256");
@@ -41,14 +42,14 @@ export async function exchangeCode(code: string, verifier: string): Promise<{ su
     const authCode = splits[0];
     const state = splits[1];
 
-    console.log("[OAuth] Parsed code - length:", authCode?.length, "state:", state?.length || "none");
+    console.log("[OAuth] Parsed code - authCode length:", authCode?.length, "state length:", state?.length || "none");
 
     const requestBody = {
       code: authCode,
       state: state,
       grant_type: "authorization_code",
       client_id: CLIENT_ID,
-      redirect_uri: "https://console.anthropic.com/oauth/code/callback",
+      redirect_uri: REDIRECT_URI,
       code_verifier: verifier,
     };
 

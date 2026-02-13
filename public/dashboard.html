@@ -806,7 +806,7 @@
     <script>
         const API_BASE = '';
         let authToken = localStorage.getItem('token');
-        let currentVerifier = null;
+        let currentVerifier = sessionStorage.getItem('oauth_verifier') || null;
         let assigningKeyId = null;
         let hasOAuthConnection = false;
         let currentUserPlan = 'pro';
@@ -1120,6 +1120,7 @@
                 const data = await response.json();
 
                 currentVerifier = data.verifier;
+                sessionStorage.setItem('oauth_verifier', data.verifier);
                 window.open(data.url, '_blank');
 
                 // Show inline code input section
@@ -1144,12 +1145,19 @@
             document.getElementById('code-input-section').classList.remove('active');
             document.getElementById('oauth-code-input').value = '';
             currentVerifier = null;
+            sessionStorage.removeItem('oauth_verifier');
         }
 
         async function exchangeCode(code) {
             if (!currentVerifier) {
-                showMessage('OAuth flow not started properly', 'error');
+                showMessage('OAuth flow not started properly. Please click Connect again.', 'error');
                 return;
+            }
+
+            const submitBtn = document.querySelector('#code-input-section .btn-primary');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Submitting...';
             }
 
             try {
@@ -1163,6 +1171,7 @@
                 if (response.ok) {
                     showMessage('Claude account connected successfully!', 'success');
                     currentVerifier = null;
+                    sessionStorage.removeItem('oauth_verifier');
                     // Hide the code input section
                     document.getElementById('code-input-section').classList.remove('active');
                     document.getElementById('oauth-code-input').value = '';
@@ -1172,6 +1181,11 @@
                 }
             } catch (error) {
                 showMessage('Network error', 'error');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Submit';
+                }
             }
         }
 
@@ -1779,6 +1793,10 @@
         }, 10000); // 10 second timeout
 
         console.log('[Dashboard] Calling checkOAuthStatus...');
+        // Restore code input section if OAuth flow was in progress before page reload
+        if (currentVerifier) {
+            document.getElementById('code-input-section').classList.add('active');
+        }
         checkOAuthStatus().then(() => {
             console.log('[Dashboard] checkOAuthStatus completed');
             clearTimeout(loadingTimeout);
